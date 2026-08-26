@@ -1,0 +1,23 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_AGENT_SERVICE_URL=http://localhost:8000
+    depends_on:
+      - agent-service
+
+  agent-service:
+    build:
+      context: ./agent-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./agent-service:/app
+    env_file:
+      - ./agent-service/.env
