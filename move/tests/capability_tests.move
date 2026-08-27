@@ -269,7 +269,7 @@ fun over_period_limit_aborts_within_same_period() {
 
     // Three calls at TX_LIMIT each would total 300_000 == PERIOD_LIMIT
     // exactly; push it over with a fourth within the same period.
-    let mut i = 0;
+    let mut i: u64 = 0;
     while (i < 3) {
         capability::execute_action_and_transfer_to_operator(
             &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
@@ -298,7 +298,7 @@ fun period_rolls_over_after_period_length_elapses() {
 
     // Spend right up to the period limit, in TX_LIMIT-sized chunks (a
     // single PERIOD_LIMIT-sized call would exceed the per-tx limit).
-    let mut i = 0;
+    let mut i: u64 = 0;
     while (i < 3) {
         capability::execute_action_and_transfer_to_operator(
             &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
