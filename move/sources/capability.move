@@ -201,7 +201,7 @@ public fun execute_action(
     risk_score: u8,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): Option<Coin<SUI>> {
     assert!(cap.operator == ctx.sender(), ENotOperator);
     assert!(cap.vault_id == object::id(vault), EWrongVault);
     assert!(cap.active, EInactive);
@@ -235,11 +235,10 @@ public fun execute_action(
             risk_score,
         });
         transfer::transfer(pending, cap.owner);
+        option::none()
     } else {
         cap.period_spent = cap.period_spent + amount;
-        // TODO: actual balance movement
-        // wire real swap / transfer / stake dispatch when corresponding
-        // external calls (Cets/Turbos/etc) are scoped
+        let out_coin = coin::take(&mut vault.balance, amount, ctx);
         event::emit(ActionExecuted {
             cap_id: object::id(cap),
             action_type,
@@ -247,6 +246,7 @@ public fun execute_action(
             amount,
             risk_score,
         });
+        option::some(out_coin)
     }
 }
 
@@ -256,8 +256,8 @@ public fun approve_pending(
     pending: PendingAction,
     cap: &mut AgentCap,
     vault: &mut Vault,
-    ctx: &TxContext,
-) {
+    ctx: &mut TxContext,
+): Coin<SUI> {
     assert!(cap.owner == ctx.sender(), ENotOwner);
     assert!(pending.cap_id == object::id(cap), EWrongCap);
     assert!(pending.vault_id == object::id(vault), EWrongVault);
@@ -265,14 +265,13 @@ public fun approve_pending(
     let PendingAction { id, cap_id: _, vault_id: _, action_type, target, amount, risk_score, created_at_ms: _ } = pending;
 
     cap.period_spent = cap.period_spent + amount;
-
-    // TODO: same placeholder as execute_action() - actual balance movement
-    // to be wired in one external call dispatch is scoped
+    let out_coin = coin::take(&mut vault.balance, amount, ctx);
 
     event::emit(PendingApproved { pending_id: object::uid_to_inner(&id), cap_id: object::id(cap) });
     event::emit(ActionExecuted { cap_id: object::id(cap), action_type, target, amount, risk_score });
 
     object::delete(id);
+    out_coin
 }
 
 
