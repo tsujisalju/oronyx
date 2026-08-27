@@ -1,0 +1,26 @@
+{
+  "name": "@oronyx/executor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/executeAgentAction.ts",
+    "start": "node dist/executeAgentAction.js",
+    "test:cetus": "tsx src/testCetusSwap.ts",
+    "test:policy": "tsx src/testPolicyCheck.ts"
+  },
+  "dependencies": {
+    "@cetusprotocol/common-sdk": "^1.4.2",
+    "@cetusprotocol/sui-clmm-sdk": "^1.4.7",
+    "@mysten/sui": "^2.27.0",
+    "@types/bn.js": "^5.2.0",
+    "bn.js": "^5.2.5",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3"
+  }
+}
