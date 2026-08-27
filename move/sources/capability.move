@@ -250,6 +250,32 @@ public fun execute_action(
     }
 }
 
+/// Convenience wrapper around execute_action for callers (the operator
+/// executor script) that don't need to inspect the Option<Coin<SUI>>
+/// result themselves. If the action is approved, the released coin
+/// is transferred directly to `ctx.sender()` (the operator) so it can be
+/// used as input to a follow-up transaction (e.g. a Cetus swap) without
+/// the acaller needing to inwrap an Option on the TS side. If the action
+/// is flagged instead, no coin exists yet, and returns exactly like `execute_action`
+public fun execute_action_and_transfer_to_operator(
+    cap: &mut AgentCap,
+    vault: &mut Vault,
+    action_type: u8,
+    target: address,
+    amount: u64, // amount is in MIST (1 SUI = 10^9 MIST)
+    risk_score: u8,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let maybe_coin = execute_action(cap, vault, action_type, target, amount, risk_score, clock, ctx);
+    if(maybe_coin.is_some()) {
+        let coin = maybe_coin.destroy_some();
+        transfer::public_transfer(coin, ctx.sender());
+    } else {
+        maybe_coin.destroy_none();
+    }
+}
+
 /* Approval flow for flagged actions */
 
 public fun approve_pending(
