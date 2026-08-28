@@ -19,6 +19,7 @@ const ENotOperator: u64 = 7;
 
 // Mirrors capability.move's private action-type codes.
 const ACTION_SWAP: u8 = 1;
+const ACTION_CETUS_SWAP: u8 = 3;
 
 const OWNER: address = @0xA;
 const OPERATOR: address = @0xB;
@@ -51,7 +52,7 @@ fun setup(scenario: &mut ts::Scenario) {
         TX_LIMIT,
         PERIOD_LIMIT,
         PERIOD_LENGTH_MS,
-        vector[ACTION_SWAP],
+        vector[ACTION_SWAP, ACTION_CETUS_SWAP],
         vector[TARGET],
         RISK_THRESHOLD,
         EXPIRY_MS,
@@ -73,10 +74,9 @@ fun low_risk_action_releases_coin_to_operator() {
     let mut cap = scenario.take_shared<AgentCap>();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::execute_action_and_transfer_to_operator(
+    capability::execute_cetus_swap_and_transfer_to_operator(
         &mut cap,
         &mut vault,
-        ACTION_SWAP,
         TARGET,
         50_000,
         RISK_THRESHOLD, // == threshold, not > threshold, so this stays low-risk
@@ -182,8 +182,8 @@ fun non_operator_cannot_execute_action() {
     let mut cap = scenario.take_shared<AgentCap>();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::execute_action_and_transfer_to_operator(
-        &mut cap, &mut vault, ACTION_SWAP, TARGET, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
+    capability::execute_cetus_swap_and_transfer_to_operator(
+        &mut cap, &mut vault, TARGET, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
 
     ts::return_shared(vault);
@@ -207,8 +207,8 @@ fun deactivated_cap_rejects_execute_action() {
     let mut cap = scenario.take_shared<AgentCap>();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::execute_action_and_transfer_to_operator(
-        &mut cap, &mut vault, ACTION_SWAP, TARGET, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
+    capability::execute_cetus_swap_and_transfer_to_operator(
+        &mut cap, &mut vault, TARGET, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
 
     ts::return_shared(vault);
@@ -227,8 +227,8 @@ fun disallowed_target_aborts() {
     let mut cap = scenario.take_shared<AgentCap>();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::execute_action_and_transfer_to_operator(
-        &mut cap, &mut vault, ACTION_SWAP, @0xBAD, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
+    capability::execute_cetus_swap_and_transfer_to_operator(
+        &mut cap, &mut vault, @0xBAD, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
 
     ts::return_shared(vault);
@@ -247,8 +247,8 @@ fun over_per_tx_limit_aborts() {
     let mut cap = scenario.take_shared<AgentCap>();
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::execute_action_and_transfer_to_operator(
-        &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT + 1, RISK_THRESHOLD, &clock, scenario.ctx(),
+    capability::execute_cetus_swap_and_transfer_to_operator(
+        &mut cap, &mut vault, TARGET, TX_LIMIT + 1, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
 
     ts::return_shared(vault);
@@ -271,13 +271,13 @@ fun over_period_limit_aborts_within_same_period() {
     // exactly; push it over with a fourth within the same period.
     let mut i: u64 = 0;
     while (i < 3) {
-        capability::execute_action_and_transfer_to_operator(
-            &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
+        capability::execute_cetus_swap_and_transfer_to_operator(
+            &mut cap, &mut vault, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
         );
         i = i + 1;
     };
-    capability::execute_action_and_transfer_to_operator(
-        &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
+    capability::execute_cetus_swap_and_transfer_to_operator(
+        &mut cap, &mut vault, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
 
     ts::return_shared(vault);
@@ -300,8 +300,8 @@ fun period_rolls_over_after_period_length_elapses() {
     // single PERIOD_LIMIT-sized call would exceed the per-tx limit).
     let mut i: u64 = 0;
     while (i < 3) {
-        capability::execute_action_and_transfer_to_operator(
-            &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
+        capability::execute_cetus_swap_and_transfer_to_operator(
+            &mut cap, &mut vault, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
         );
         i = i + 1;
     };
@@ -310,8 +310,8 @@ fun period_rolls_over_after_period_length_elapses() {
     // so this next call (which would otherwise exceed the period limit)
     // succeeds instead of aborting.
     clock.increment_for_testing(PERIOD_LENGTH_MS + 1);
-    capability::execute_action_and_transfer_to_operator(
-        &mut cap, &mut vault, ACTION_SWAP, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
+    capability::execute_cetus_swap_and_transfer_to_operator(
+        &mut cap, &mut vault, TARGET, TX_LIMIT, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
 
     ts::return_shared(vault);
