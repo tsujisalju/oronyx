@@ -6,6 +6,9 @@ use sui::sui::SUI;
 use sui::clock::Clock;
 use sui::vec_set::{Self, VecSet};
 use sui::event;
+use sui_system::sui_system::{Self, SuiSystemState};
+use oronyx::mock_dex::{Self, MockPool};
+use oronyx::mock_usdc::MOCK_USDC;
 
 /* Errors */
 const EInactive: u64 = 0;
@@ -21,8 +24,9 @@ const EWrongCap: u64 = 9;
 
 /* Action type codes */
 const ACTION_TRANSFER: u8 = 0;
-const ACTION_SWAP: u8 = 1;
+const ACTION_MOCK_SWAP: u8 = 1;
 const ACTION_STAKE: u8 = 2;
+const ACTION_CETUS_SWAP: u8 = 3;
 
 /* Structs */
 
@@ -250,27 +254,106 @@ public fun execute_action(
     }
 }
 
-/// Convenience wrapper around execute_action for callers (the operator
-/// executor script) that don't need to inspect the Option<Coin<SUI>>
-/// result themselves. If the action is approved, the released coin
-/// is transferred directly to `ctx.sender()` (the operator) so it can be
-/// used as input to a follow-up transaction (e.g. a Cetus swap) without
-/// the acaller needing to inwrap an Option on the TS side. If the action
-/// is flagged instead, no coin exists yet, and returns exactly like `execute_action`
-public fun execute_action_and_transfer_to_operator(
+/// Entry function for Cetus swap, this action type has an external SDK that
+/// require a two-step hand-off. Cetus' swap builder always constructs its own tx
+/// and selects input coins from the signer's on-chain balance, with no way to
+/// accept a specific coin object or an existing transaction to append to.
+///
+/// Releases the approved coin to `ctx.sender()` (the operator), so the executor's
+/// second transaction (an ordinary Cetus swap) can pick it up from the operator's
+/// own balance. Not atomic, if the second transaction fails, funds remain with the
+/// the operator rather than returning to the vault.
+public fun execute_cetus_swap_and_transfer_to_operator(
     cap: &mut AgentCap,
     vault: &mut Vault,
-    action_type: u8,
-    target: address,
-    amount: u64, // amount is in MIST (1 SUI = 10^9 MIST)
+    cetus_pool_address: address,
+    amount: u64, // MIST
     risk_score: u8,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let maybe_coin = execute_action(cap, vault, action_type, target, amount, risk_score, clock, ctx);
+    let maybe_coin = execute_action(cap, vault, ACTION_CETUS_SWAP, cetus_pool_address, amount, risk_score, clock, ctx);
     if(maybe_coin.is_some()) {
-        let coin = maybe_coin.destroy_some();
-        transfer::public_transfer(coin, ctx.sender());
+        transfer::public_transfer(maybe_coin.destroy_some(), ctx.sender());
+    } else {
+        maybe_coin.destroy_none();
+    }
+}
+
+/* Atomic action types */
+// Funds never leave vault custody boundary until they land
+// at their real destination, all within one PTB. Each has its
+// own entry function because Move does not support optional args,
+// so each action type's extra required objects (a MockPool,
+// a SuiSystemState, etc.) need their iwn dedicated signature. Only
+// actions whose external SDK forces a two-step hand-off (such as Cetus)
+// use execute_action_and_tranfer_to_operator instead.
+
+public fun execute_transfer(
+    cap: &mut AgentCap,
+    vault: &mut Vault,
+    recipient: address,
+    amount: u64, // MIST
+    risk_score: u8,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let maybe_coin = execute_action(cap, vault, ACTION_TRANSFER, recipient, amount, risk_score, clock, ctx);
+    if (maybe_coin.is_some()) {
+        transfer::public_transfer(maybe_coin.destroy_some(), recipient);
+    } else {
+        maybe_coin.destroy_none();
+    }
+}
+
+/// `validator` is both the policy's target (must be in allowed_targets)
+/// and the actual validator address staked with.
+///
+/// Verified against the sui-system framework source:
+/// `sui_system::request_add_stake_non_entry` returns a `StakedSui` object
+/// (has `key, store`, not `drop`) rather than auto-transferring it, so the
+/// result must be explicitly transferred here.
+public fun execute_stake(
+    cap: &mut AgentCap,
+    vault: &mut Vault,
+    system_state: &mut SuiSystemState,
+    validator: address,
+    amount: u64, // MIST
+    risk_score: u8,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let maybe_coin = execute_action(cap, vault, ACTION_STAKE, validator, amount, risk_score, clock, ctx);
+    if (maybe_coin.is_some()) {
+        let staked = sui_system::request_add_stake_non_entry(
+            system_state,
+            maybe_coin.destroy_some(),
+            validator,
+            ctx
+        );
+        transfer::public_transfer(staked, cap.owner);
+    } else {
+        maybe_coin.destroy_none();
+    }
+}
+
+/// `pool_address` is both the policy's target (must be in allowed targets list)
+/// and the actual `MockPool` object passed in. The caller is responsible for
+/// making these consistent; a mismatch here is a caller bug.
+public fun execute_mock_swap(
+    cap: &mut AgentCap,
+    vault: &mut Vault,
+    pool: &mut MockPool,
+    pool_address: address,
+    amount: u64, // MIST
+    risk_score: u8,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let maybe_coin = execute_action(cap, vault, ACTION_MOCK_SWAP, pool_address, amount, risk_score, clock, ctx);
+    if (maybe_coin.is_some()) {
+        let out: Coin<MOCK_USDC> = mock_dex::swap_sui_for_mock_usdc(pool, maybe_coin.destroy_some(), ctx);
+        transfer::public_transfer(out, cap.owner);
     } else {
         maybe_coin.destroy_none();
     }
