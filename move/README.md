@@ -32,33 +32,68 @@ system.
 - `owner` — the user. Can deactivate the cap, approve or reject a
   `PendingAction`.
 - `operator` — the backend's own address (see `/executor`). The only address
-  allowed to call `execute_action`.
+  allowed to call any of the `execute_*` functions.
 
 `PendingAction`, by contrast, genuinely is user-owned — approval/rejection is
 naturally gated by Sui's ownership model, so no extra authorization field is
 needed there.
 
-## Core flow
+## Action types: atomic by default
 
-`execute_action` is the single entrypoint the operator calls to attempt an
-action:
+`execute_action` is the shared policy engine — it checks `active`,
+`expiry_ms`, `allowed_actions`, `allowed_targets`, `spending_limit_per_tx`,
+and the rolling `spending_limit_period` window, then either releases a
+`Coin<SUI>` (`Option::some`) or parks a `PendingAction` for the user
+(`Option::none`). It stays `public` (used directly in tests and by the one
+two-step exception below), but application code should call one of the
+dedicated wrappers below rather than `execute_action` itself.
 
-1. Checks `active`, `expiry_ms`, `allowed_actions`, `allowed_targets`,
-   `spending_limit_per_tx`, and the rolling `spending_limit_period` window.
-2. If `risk_score <= risk_threshold`: splits `amount` off the vault's balance
-   and returns it as `Option<Coin<SUI>>` (`some`), for the caller to use
-   however it needs (e.g. as input to a follow-up DeFi transaction).
-3. If `risk_score > risk_threshold`: no funds move. A `PendingAction` is
-   created and transferred to the owner. Returns `option::none()`.
+Each supported action type gets its own entry function, because Move doesn't
+support optional or variadic arguments — an action that needs an extra
+object (a `MockPool`, a `SuiSystemState`) needs its own signature to accept
+it. **Atomicity is the default**: a new action type should complete in a
+single Move call, single PTB, funds never leaving the vault's custody
+boundary until they land at their real destination. A two-step
+release-to-operator pattern is only justified when an external protocol's
+SDK genuinely forces it (see the Cetus exception below) — that's a
+per-integration exception, not a general architecture.
 
-`execute_action_and_transfer_to_operator` is a convenience wrapper around the
-above for callers that don't want to unwrap the `Option` themselves — on the
-happy path it transfers the released coin directly to `ctx.sender()` (the
-operator).
+| Function                                      | Action type             | Delivers result to        | Notes                                                                                                                                                                                                   |
+| --------------------------------------------- | ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `execute_transfer`                            | `ACTION_TRANSFER` (0)   | `recipient`               | Plain native SUI transfer. `recipient` must be in `allowed_targets`.                                                                                                                                    |
+| `execute_stake`                               | `ACTION_STAKE` (2)      | `cap.owner`               | Calls `sui_system::request_add_stake_non_entry`, delivers the resulting `StakedSui` to the user — an ongoing position they should see and manage in their own wallet, not something the operator holds. |
+| `execute_mock_swap`                           | `ACTION_MOCK_SWAP` (1)  | `cap.owner`               | Atomic call into `oronyx::mock_dex`. `pool_address` doubles as both the policy `target` and the actual pool object passed in — caller is responsible for keeping these consistent.                      |
+| `execute_cetus_swap_and_transfer_to_operator` | `ACTION_CETUS_SWAP` (3) | `ctx.sender()` (operator) | **Not atomic.** See below.                                                                                                                                                                              |
 
-`approve_pending` / `reject_pending` resolve a flagged action. Approval
-releases the originally-requested amount from the vault; rejection simply
-deletes the pending object with no funds moved.
+## The one two-step exception: Cetus
+
+`execute_cetus_swap_and_transfer_to_operator` is deliberately scoped to
+Cetus specifically, not a generic two-step runner. It exists because
+Cetus's SDK (`@cetusprotocol/sui-clmm-sdk`) always constructs its own
+`Transaction` internally and selects input coins from the signer's on-chain
+balance — there's no way to hand it an existing transaction to append to, or
+a specific coin object as input. Given that constraint, the flow is split:
+
+1. This function checks policy and releases the approved coin to the
+   **operator's own address** (`ctx.sender()`), not the vault or the user.
+2. A second, ordinary transaction (built in `/executor`) runs the actual
+   Cetus swap against whatever the operator now holds.
+
+**This is not atomic.** If step 2 fails after step 1 succeeds, funds sit in
+the operator's wallet rather than returning to the vault, with no automatic
+reconciliation currently implemented. Treat this as a known, documented
+limitation of the Cetus integration specifically — not a precedent for how
+future action types should be designed. As more DeFi integrations are
+added, each one should be evaluated independently: if the protocol exposes
+composable Move calls, integrate atomically like `execute_mock_swap` does;
+only fall back to the two-step pattern if the protocol's SDK genuinely
+leaves no other option.
+
+As of this writing, Cetus's testnet pools were found to reject swaps with a
+zero-output error for every available SUI-paired pool at reasonable test
+amounts — see `/executor/README.md` for the verification process. The mock
+DEX (`oronyx::mock_dex`) is the primary swap path used for demos; Cetus
+integration remains implemented and reachable, not removed.
 
 ## Error codes
 
@@ -82,16 +117,24 @@ sui move build
 sui move test
 ```
 
-Tests live in `tests/capability_tests.move` and use `sui::test_scenario` to
-simulate multi-transaction flows (owner setup, operator execution, owner
-approval), plus `sui::clock` test helpers to exercise the period-rollover
-logic. Coverage includes the happy path, both pending-action resolutions,
-every authorization/policy abort, and period rollover.
+Tests live in `tests/capability_tests.move` (policy engine, Cetus path,
+transfer, mock swap) and `tests/mock_dex_tests.move` (the mock DEX in
+isolation). They use `sui::test_scenario` to simulate multi-transaction
+flows and `sui::clock` test helpers to exercise period-rollover logic.
 
-Error and action-type constants in the test module are manually mirrored
-from `capability.move`, since the source module doesn't expose them as
-`public`. If a constant's value changes in the contract, update the mirrored
-copy in the test module to match.
+**`execute_stake` has no test coverage yet.** Constructing a fake
+`SuiSystemState`/validator set for testing requires Sui's own test-utility
+scaffolding (likely something under `sui_system::governance_test_utils`,
+based on how Sui's own framework tests exercise staking), which hasn't been
+verified against this project's framework revision. Confirm the correct
+test-utility entrypoint before writing this test.
+
+Error and action-type constants in the test modules are manually mirrored
+from their source modules, since those don't expose them as `public`. If a
+constant's value changes in the contract, update the mirrored copy in the
+corresponding test module to match — this has already caused failures once
+(see git history around the `execute_cetus_swap_and_transfer_to_operator`
+rename) and will again if missed.
 
 ## Deployment (testnet)
 
@@ -102,20 +145,25 @@ sui client publish --gas-budget 200000000
 
 Record the resulting package ID from the publish output (also saved to
 `Published.toml` under `[published.testnet]`). Post-publish setup —
-creating a vault, depositing funds, and creating an agent cap — is not part
-of `publish`; see `post-deploy.sh` for the sequence of `sui client call`
-commands, and fill in the placeholder values (`<PACKAGE_ID>`, `<VAULT_ID>`,
-`<OPERATOR_ADDR>`, target address, expiry timestamp) for your own run.
+creating a vault, depositing funds, creating an agent cap, and (for the mock
+swap path) minting `MOCK_USDC` and creating a `MockPool` — is not part of
+`publish`; see `post-deploy.sh` for the sequence of `sui client call`
+commands. When creating an agent cap intended to use `execute_mock_swap`,
+make sure the `MockPool`'s object address is included in `allowed_targets`.
 
-The `create_agent_cap` call takes a shared `Clock` object as input — always
-`0x6` on any Sui network.
+The `create_agent_cap` and `execute_*` calls take a shared `Clock` object as
+input — always `0x6` on any Sui network. `execute_stake` additionally takes
+the shared `SuiSystemState` object — always `0x5`.
 
 ## Known limitations / open items
 
-- **Balance movement is generic**, not yet wired to a specific external
-  protocol call within the same transaction. See `/executor`'s README for
-  how DeFi integration (Cetus) is composed instead, and why it's currently
-  two separate transactions rather than one atomic PTB.
-- **Period rollover is a simple reset-on-boundary counter**, not a true
-  rolling window. Acceptable for the current scope; a sliding window would
-  need additional state if more precision is ever required.
+- Cetus swap path is not atomic and has no automatic reconciliation if the
+  second transaction fails after funds reach the operator — see above.
+- `execute_stake` has no test coverage yet.
+- Period rollover is a simple reset-on-boundary counter, not a true rolling
+  window. Acceptable for the current scope; a sliding window would need
+  additional state if more precision is ever required.
+- `allowed_targets`/`allowed_actions` are currently fixed at cap creation.
+  Live-editable policy lists (add/remove a target or action type without
+  disabling and recreating the whole cap) were discussed as a near-term
+  improvement but not yet implemented.
