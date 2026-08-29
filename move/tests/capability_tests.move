@@ -21,6 +21,7 @@ const EOverTxLimit: u64 = 4;
 const EOverPeriodLimit: u64 = 5;
 const ENotOwner: u64 = 6;
 const ENotOperator: u64 = 7;
+const ECannotRemoveProtocolTarget: u64 = 10;
 
 // Mirrors capability.move's private action-type codes.
 const ACTION_TRANSFER: u8 = 0;
@@ -62,6 +63,7 @@ fun setup(scenario: &mut ts::Scenario) {
         PERIOD_LENGTH_MS,
         vector[ACTION_TRANSFER, ACTION_SWAP, ACTION_CETUS_SWAP],
         vector[TARGET],
+        vector[],
         RISK_THRESHOLD,
         EXPIRY_MS,
         &clock,
@@ -454,6 +456,7 @@ fun execute_mock_swap_delivers_mock_usdc_to_owner() {
         PERIOD_LENGTH_MS,
         vector[ACTION_SWAP], // == ACTION_MOCK_SWAP
         vector[pool_address],
+        vector[pool_address],
         RISK_THRESHOLD,
         EXPIRY_MS,
         &clock,
@@ -520,6 +523,7 @@ fun execute_stake_delivers_staked_sui_to_owner() {
         PERIOD_LENGTH_MS,
         vector[ACTION_STAKE],
         vector[VALIDATOR],
+        vector[VALIDATOR],
         RISK_THRESHOLD,
         EXPIRY_MS,
         &clock,
@@ -563,5 +567,201 @@ fun execute_stake_delivers_staked_sui_to_owner() {
     assert_eq!(staked.staked_sui_amount(), STAKE_AMOUNT);
     destroy(staked);
 
+    scenario.end();
+}
+
+/* Policy update functions */
+
+#[test]
+fun add_and_remove_allowed_target_by_owner_succeeds() {
+    let mut scenario = ts::begin(OWNER);
+    setup (&mut scenario);
+    scenario.next_tx(OWNER);
+    let mut cap = scenario.take_shared<AgentCap>();
+
+    capability::add_allowed_target(&mut cap, @0xF00D, scenario.ctx());
+    capability::remove_allowed_target(&mut cap, @0xF00D, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENotOwner, location = capability)]
+fun add_allowed_target_by_non_owner_aborts() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(ATTACKER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    capability::add_allowed_target(&mut cap, @0xF00D, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENotOwner, location = capability)]
+fun remove_allowed_target_by_non_owner_aborts() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(ATTACKER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    capability::remove_allowed_target(&mut cap, TARGET, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+/// The actual point of protocol_targets: a target an enabled action type
+/// structurally depends on can't be removed via the normal owner-editable
+/// path, even by the legitimate owner. Uses the mock-swap test's cap,
+/// since setup()'s generic cap has no protocol targets to test against.
+#[test, expected_failure(abort_code = ECannotRemoveProtocolTarget, location = capability)]
+fun remove_protocol_required_target_aborts_even_for_owner() {
+    let mut scenario = ts::begin(OWNER);
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    capability::create_vault(scenario.ctx());
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
+
+    let pool_sui = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
+    let pool_usdc = coin::mint_for_testing<MOCK_USDC>(9_500_000_000, scenario.ctx());
+    mock_dex::create_pool(pool_sui, pool_usdc, MOCK_RATE_USDC_PER_SUI, scenario.ctx());
+    scenario.next_tx(OWNER);
+    let pool = scenario.take_shared<MockPool>();
+    let pool_address = object::id(&pool).to_address();
+    ts::return_shared(pool);
+
+    capability::create_agent_cap(
+        &vault, OPERATOR, TX_LIMIT, PERIOD_LIMIT, PERIOD_LENGTH_MS,
+        vector[ACTION_SWAP], vector[pool_address], vector[pool_address],
+        RISK_THRESHOLD, EXPIRY_MS, &clock, scenario.ctx(),
+    );
+    ts::return_shared(vault);
+    clock.destroy_for_testing();
+
+    scenario.next_tx(OWNER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    capability::remove_allowed_target(&mut cap, pool_address, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+/// A protocol target's presence in allowed_targets isn't independently
+/// user-removable, but a *non*-protocol target added alongside it should
+/// still behave normally — confirms the guard is scoped to protocol
+/// targets specifically, not a blanket freeze on the whole set once any
+/// protocol target exists.
+#[test]
+fun non_protocol_target_still_removable_when_cap_has_protocol_targets() {
+    let mut scenario = ts::begin(OWNER);
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    capability::create_vault(scenario.ctx());
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
+
+    let pool_sui = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
+    let pool_usdc = coin::mint_for_testing<MOCK_USDC>(9_500_000_000, scenario.ctx());
+    mock_dex::create_pool(pool_sui, pool_usdc, MOCK_RATE_USDC_PER_SUI, scenario.ctx());
+    scenario.next_tx(OWNER);
+    let pool = scenario.take_shared<MockPool>();
+    let pool_address = object::id(&pool).to_address();
+    ts::return_shared(pool);
+
+    capability::create_agent_cap(
+        &vault, OPERATOR, TX_LIMIT, PERIOD_LIMIT, PERIOD_LENGTH_MS,
+        vector[ACTION_SWAP, ACTION_TRANSFER], vector[pool_address, TARGET], vector[pool_address],
+        RISK_THRESHOLD, EXPIRY_MS, &clock, scenario.ctx(),
+    );
+    ts::return_shared(vault);
+    clock.destroy_for_testing();
+
+    scenario.next_tx(OWNER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    // TARGET is a plain allowed target here, not a protocol target —
+    // removing it should succeed even though pool_address (protocol) is
+    // also present on the same cap.
+    capability::remove_allowed_target(&mut cap, TARGET, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+#[test]
+fun update_functions_apply_new_values_by_owner() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(OWNER);
+    let mut cap = scenario.take_shared<AgentCap>();
+
+    capability::update_spending_limit_per_tx(&mut cap, TX_LIMIT * 2, scenario.ctx());
+    capability::update_spending_limit_period(&mut cap, PERIOD_LIMIT * 2, scenario.ctx());
+    capability::update_period_length_ms(&mut cap, PERIOD_LENGTH_MS * 2, scenario.ctx());
+    capability::update_risk_threshold(&mut cap, RISK_THRESHOLD + 10, scenario.ctx());
+    capability::update_expiry_ms(&mut cap, EXPIRY_MS - 1, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENotOwner, location = capability)]
+fun update_spending_limit_per_tx_by_non_owner_aborts() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(ATTACKER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    capability::update_spending_limit_per_tx(&mut cap, TX_LIMIT * 2, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENotOwner, location = capability)]
+fun update_risk_threshold_by_non_owner_aborts() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(ATTACKER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    capability::update_risk_threshold(&mut cap, RISK_THRESHOLD + 10, scenario.ctx());
+
+    ts::return_shared(cap);
+    scenario.end();
+}
+
+/// Confirms an updated per-tx limit is actually enforced afterward, not
+/// just stored — exercises update_spending_limit_per_tx together with
+/// execute_transfer rather than just checking the setter runs.
+#[test, expected_failure(abort_code = EOverTxLimit, location = capability)]
+fun updated_spending_limit_is_enforced_on_next_execution() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(OWNER);
+    let mut cap = scenario.take_shared<AgentCap>();
+    capability::update_spending_limit_per_tx(&mut cap, 10_000, scenario.ctx()); // lowered from TX_LIMIT
+    ts::return_shared(cap);
+
+    scenario.next_tx(OPERATOR);
+    let mut vault = scenario.take_shared<Vault>();
+    let mut cap = scenario.take_shared<AgentCap>();
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    capability::execute_transfer(
+        &mut cap, &mut vault, TARGET, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
+    );
+
+    ts::return_shared(vault);
+    ts::return_shared(cap);
+    clock.destroy_for_testing();
     scenario.end();
 }

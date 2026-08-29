@@ -21,6 +21,7 @@ const ENotOwner: u64 = 6;
 const ENotOperator: u64 = 7;
 const EWrongVault: u64 = 8;
 const EWrongCap: u64 = 9;
+const ECannotRemoveProtocolTarget: u64 = 10;
 
 /* Action type codes */
 const ACTION_TRANSFER: u8 = 0;
@@ -55,6 +56,12 @@ public struct AgentCap has key {
     period_length_ms: u64,
     allowed_actions: VecSet<u8>,
     allowed_targets: VecSet<address>,
+    /// Subset of allowed_targets that a currently-enabled action type
+    /// structurally depends on (a DeFi pool, a validator address).
+    /// They need to be protected from removal via remove_allowed_target
+    /// so the user can't accidentally break an action by editing their
+    /// target whitelist. Populated once at cap creation, not independently user-editable.
+    protocol_targets: VecSet<address>,
     risk_threshold: u8,
     expiry_ms: u64,
     active: bool,
@@ -141,12 +148,28 @@ public fun create_agent_cap(
     period_length_ms: u64,
     allowed_actions: vector<u8>,
     allowed_targets: vector<address>,
+    // The caller is responsible for declaring these based on which
+    // allowed_actions are set. They are automatically unioned into
+    // allowed_targets.
+    protocol_targets: vector<address>,
     risk_threshold: u8,
     expiry_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert!(vault.owner == ctx.sender(), ENotOwner);
+
+    let mut targets = vec_set::from_keys(allowed_targets);
+    let mut i = 0;
+    let n = protocol_targets.length();
+    while (i < n) {
+        let addr = protocol_targets[i];
+        if (!targets.contains(&addr)) {
+            targets.insert(addr);
+        };
+        i = i + 1;
+    };
+    let protocol_targets_set = vec_set::from_keys(protocol_targets);
 
     let cap = AgentCap {
         id: object::new(ctx),
@@ -159,7 +182,8 @@ public fun create_agent_cap(
         period_start_ms: clock.timestamp_ms(),
         period_length_ms,
         allowed_actions: vec_set::from_keys(allowed_actions),
-        allowed_targets: vec_set::from_keys(allowed_targets),
+        allowed_targets: targets,
+        protocol_targets: protocol_targets_set,
         risk_threshold,
         expiry_ms,
         active: true,
@@ -190,6 +214,7 @@ public fun remove_allowed_target(
     ctx: &TxContext,
 ) {
     assert!(cap.owner == ctx.sender(), ENotOwner);
+    assert!(!cap.protocol_targets.contains(&target), ECannotRemoveProtocolTarget);
     cap.allowed_targets.remove(&target);
 }
 
