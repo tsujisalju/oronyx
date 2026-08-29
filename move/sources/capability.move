@@ -174,6 +174,70 @@ public fun create_agent_cap(
     transfer::share_object(cap);
 }
 
+public fun add_allowed_target(
+    cap: &mut AgentCap,
+    target: address,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.allowed_targets.insert(target);
+}
+
+
+public fun remove_allowed_target(
+    cap: &mut AgentCap,
+    target: address,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.allowed_targets.remove(&target);
+}
+
+public fun update_spending_limit_per_tx(
+    cap: &mut AgentCap,
+    spending_limit_per_tx: u64,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.spending_limit_per_tx = spending_limit_per_tx;
+}
+
+public fun update_spending_limit_period(
+    cap: &mut AgentCap,
+    spending_limit_period: u64,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.spending_limit_period = spending_limit_period;
+}
+
+public fun update_period_length_ms(
+    cap: &mut AgentCap,
+    period_length_ms: u64,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.period_length_ms = period_length_ms;
+}
+
+public fun update_risk_threshold(
+    cap: &mut AgentCap,
+    risk_threshold: u8,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.risk_threshold = risk_threshold;
+}
+
+public fun update_expiry_ms(
+    cap: &mut AgentCap,
+    expiry_ms: u64,
+    ctx: &TxContext,
+) {
+    assert!(cap.owner == ctx.sender(), ENotOwner);
+    cap.expiry_ms = expiry_ms;
+}
+
 public fun deactivate(cap: &mut AgentCap, ctx: &TxContext) {
     assert!(cap.owner == ctx.sender(), ENotOwner);
     cap.active = false;
