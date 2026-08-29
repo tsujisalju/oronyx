@@ -19,5 +19,20 @@ services:
       - "8000:8000"
     volumes:
       - ./agent-service:/app
+    environment:
+      - ORONYX_EXECUTOR_URL=http://executor:4000
     env_file:
       - ./agent-service/.env
+    depends_on:
+      - executor
+
+  executor:
+    build:
+      context: ./executor
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./executor:/app
+      - /app/node_modules
+    env_file:
+      - ./executor/.env
