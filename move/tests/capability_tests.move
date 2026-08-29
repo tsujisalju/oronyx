@@ -9,6 +9,9 @@ use sui::coin;
 use sui::sui::SUI;
 use sui::clock;
 use std::unit_test::{assert_eq, destroy};
+use sui_system::sui_system::SuiSystemState;
+use sui_system::staking_pool::StakedSui;
+use sui_system::governance_test_utils;
 
 // Mirrors capability.move's private error constants — kept in sync manually
 // since the source module doesn't expose them.
@@ -22,6 +25,7 @@ const ENotOperator: u64 = 7;
 // Mirrors capability.move's private action-type codes.
 const ACTION_TRANSFER: u8 = 0;
 const ACTION_SWAP: u8 = 1; // == ACTION_MOCK_SWAP, same underlying value
+const ACTION_STAKE: u8 = 2;
 const ACTION_CETUS_SWAP: u8 = 3;
 
 const OWNER: address = @0xA;
@@ -481,15 +485,83 @@ fun execute_mock_swap_delivers_mock_usdc_to_owner() {
     scenario.end();
 }
 
-/* execute_stake — NOT YET COVERED.
- *
- * Unlike Vault/AgentCap/MockPool, `SuiSystemState` isn't something this
- * test module can construct directly with `object::new` — it requires
- * Sui's own test scaffolding for spinning up a fake validator set
- * (likely something under a module like sui_system::governance_test_utils,
- * based on how Sui's own framework tests exercise staking, though the
- * exact function name/signature was not verified against your framework
- * checkout in this session). Confirm the correct test-utility entrypoint
- * before writing this test — do not assume the above module path is
- * correct without checking it directly against your dependency source.
- */
+/* execute_stake — atomic staking via sui_system::request_add_stake_non_entry */
+
+const VALIDATOR: address = @0xE;
+// sui_system::validator_set::MIN_STAKING_THRESHOLD is 1 SUI — well above
+// this suite's usual TX_LIMIT/PERIOD_LIMIT, so (like execute_mock_swap's
+// test) this can't reuse the shared setup() helper.
+const STAKE_AMOUNT: u64 = 1_000_000_000;
+
+/// Verified against the framework source: `sui_system::governance_test_utils`
+/// (deprecated in favor of `sui_system::test_runner`, which instead owns its
+/// own internal `Scenario` rather than working off the caller's own — the
+/// deprecated module's plain `create_validator_for_testing` +
+/// `create_sui_system_state_for_testing` functions match this suite's
+/// existing take_shared/return_shared style, so used here instead) shares a
+/// real `SuiSystemState` object that can be taken like `Vault`/`AgentCap`.
+#[test]
+#[allow(deprecated_usage)]
+fun execute_stake_delivers_staked_sui_to_owner() {
+    let mut scenario = ts::begin(OWNER);
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    capability::create_vault(scenario.ctx());
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(STAKE_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
+
+    capability::create_agent_cap(
+        &vault,
+        OPERATOR,
+        STAKE_AMOUNT,
+        STAKE_AMOUNT,
+        PERIOD_LENGTH_MS,
+        vector[ACTION_STAKE],
+        vector[VALIDATOR],
+        RISK_THRESHOLD,
+        EXPIRY_MS,
+        &clock,
+        scenario.ctx(),
+    );
+    ts::return_shared(vault);
+
+    // Spin up a single-validator SuiSystemState via the framework's own
+    // staking test scaffolding. `create_validator_for_testing` internally
+    // transfers a ValidatorOperationCap and requires the sender to be
+    // either @0x0 or the validator's own address (see how the framework's
+    // own `set_up_sui_system_state` begins a fresh scenario as @0x0 before
+    // calling it) — neither OWNER nor OPERATOR would satisfy that.
+    scenario.next_tx(@0x0);
+    let validator = governance_test_utils::create_validator_for_testing(
+        VALIDATOR, 100, scenario.ctx(),
+    );
+    governance_test_utils::create_sui_system_state_for_testing(
+        vector[validator], 1000, 0, scenario.ctx(),
+    );
+
+    scenario.next_tx(OPERATOR);
+    let mut vault = scenario.take_shared<Vault>();
+    let mut cap = scenario.take_shared<AgentCap>();
+    let mut system_state = scenario.take_shared<SuiSystemState>();
+
+    capability::execute_stake(
+        &mut cap, &mut vault, &mut system_state, VALIDATOR, STAKE_AMOUNT, RISK_THRESHOLD, &clock, scenario.ctx(),
+    );
+
+    ts::return_shared(vault);
+    ts::return_shared(cap);
+    ts::return_shared(system_state);
+    clock.destroy_for_testing();
+
+    // StakedSui goes to the owner, not the operator — matches
+    // execute_mock_swap's pattern of delivering the resulting
+    // position/asset to the user.
+    scenario.next_tx(OWNER);
+    let staked = scenario.take_from_sender<StakedSui>();
+    assert_eq!(staked.staked_sui_amount(), STAKE_AMOUNT);
+    destroy(staked);
+
+    scenario.end();
+}
