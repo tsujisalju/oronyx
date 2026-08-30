@@ -1,5 +1,7 @@
 "use client";
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import {
   LineChart,
   Line,
@@ -43,19 +45,14 @@ export default function ExecutionChart({
 );
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+    <Card>
 
-      <div>
-        <h2 className="text-xl font-semibold">
-          Execution Activity
-        </h2>
+      <CardHeader>
+        <CardTitle className="text-xl">Execution Activity</CardTitle>
+        <CardDescription>Agent executions over time</CardDescription>
+      </CardHeader>
 
-        <p className="mt-1 text-sm text-zinc-400">
-          Agent executions over time
-        </p>
-      </div>
-
-      <div className="mt-6 h-72">
+      <CardContent className="h-80">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={groupedData}>
 
@@ -92,8 +89,7 @@ export default function ExecutionChart({
 
           </LineChart>
         </ResponsiveContainer>
-      </div>
-
-    </div>
+      </CardContent>
+    </Card>
   );
 }
