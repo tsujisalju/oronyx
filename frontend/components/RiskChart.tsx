@@ -10,6 +10,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
 interface Execution {
   risk: number;
 }
@@ -18,66 +26,37 @@ interface RiskChartProps {
   executions: Execution[];
 }
 
-export default function RiskChart({
-  executions,
-}: RiskChartProps) {
+export default function RiskChart({ executions }: RiskChartProps) {
   const data = [
     {
       range: "Low",
-      count: executions.filter(
-        (execution) => execution.risk < 30
-      ).length,
+      count: executions.filter((execution) => execution.risk < 30).length,
     },
     {
       range: "Medium",
       count: executions.filter(
-        (execution) =>
-          execution.risk >= 30 &&
-          execution.risk < 60
+        (execution) => execution.risk >= 30 && execution.risk < 60,
       ).length,
     },
     {
       range: "High",
-      count: executions.filter(
-        (execution) => execution.risk >= 60
-      ).length,
+      count: executions.filter((execution) => execution.risk >= 60).length,
     },
   ];
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-xl">Risk Distribution</CardTitle>
+        <CardDescription>Execution risk levels</CardDescription>
+      </CardHeader>
 
-      <h2 className="text-xl font-semibold">
-        Risk Distribution
-      </h2>
-
-      <p className="mt-1 text-sm text-zinc-400">
-        Execution risk levels
-      </p>
-
-      <div className="mt-6 h-72">
-
-        <ResponsiveContainer
-          width="100%"
-          height="100%"
-        >
+      <CardContent className="h-80">
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
-
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="#27272a"
-            />
-
-            <XAxis
-              dataKey="range"
-              stroke="#71717a"
-            />
-
-            <YAxis
-              allowDecimals={false}
-              stroke="#71717a"
-            />
-
+            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+            <XAxis dataKey="range" stroke="#71717a" />
+            <YAxis allowDecimals={false} stroke="#71717a" />
             <Tooltip
               contentStyle={{
                 backgroundColor: "#18181b",
@@ -85,18 +64,10 @@ export default function RiskChart({
                 borderRadius: "8px",
               }}
             />
-
-            <Bar
-              dataKey="count"
-              fill="#ffffff"
-              radius={[4, 4, 0, 0]}
-            />
-
+            <Bar dataKey="count" fill="#ffffff" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
-
-      </div>
-
-    </div>
+      </CardContent>
+    </Card>
   );
 }

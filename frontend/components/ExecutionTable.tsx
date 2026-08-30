@@ -1,3 +1,20 @@
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 interface Execution {
   action: string;
   amount: number;
@@ -9,56 +26,46 @@ interface ExecutionTableProps {
   executions: Execution[];
 }
 
-export default function ExecutionTable({
-  executions,
-}: ExecutionTableProps) {
+export default function ExecutionTable({ executions }: ExecutionTableProps) {
   return (
-    <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-
-      <h2 className="text-xl font-semibold">
-        Recent Executions
-      </h2>
-
-      <div className="mt-6 space-y-3">
-
-        {executions.map((execution, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 p-4"
-          >
-
-            <div>
-              <p className="font-medium">
-                {execution.action}
-              </p>
-
-              <p className="text-sm text-zinc-400">
-                {execution.amount} SUI
-              </p>
-            </div>
-
-            <div className="text-right">
-
-              <p className="text-sm text-zinc-400">
-                Risk {execution.risk}/100
-              </p>
-
-              <p
-                className={
-                  execution.status === "APPROVED"
-                    ? "text-sm text-green-400"
-                    : "text-sm text-orange-400"
-                }
-              >
-                {execution.status}
-              </p>
-
-            </div>
-
-          </div>
-        ))}
-
-      </div>
-    </div>
+    <Card className="mt-8">
+      <CardHeader>
+        <CardTitle className="text-xl">Recent Executions</CardTitle>
+        <CardDescription>Latest autonomous actions and policy outcomes.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Action</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Risk</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {executions.map((execution, index) => (
+              <TableRow key={index}>
+                <TableCell className="font-medium">{execution.action}</TableCell>
+                <TableCell>{execution.amount} SUI</TableCell>
+                <TableCell>{execution.risk}/100</TableCell>
+                <TableCell className="text-right">
+                  <Badge
+                    variant="outline"
+                    className={
+                      execution.status === "APPROVED"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                    }
+                  >
+                    {execution.status}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
