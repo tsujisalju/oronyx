@@ -41,34 +41,32 @@ const PERIOD_LENGTH_MS: u64 = 86_400_000; // 1 day
 const RISK_THRESHOLD: u8 = 50;
 const EXPIRY_MS: u64 = 999_999_999_999;
 
-/// Shared setup: owner creates + funds a vault, then creates an AgentCap
-/// authorizing `OPERATOR` to run ACTION_SWAP and ACTION_CETUS_SWAP against
-/// `TARGET`, up to
-/// TX_LIMIT per call and PERIOD_LIMIT per period.
+/// Shared setup: creates an AgentCap (and its paired Vault, created
+/// together in one call) authorizing `OPERATOR` to run ACTION_SWAP and
+/// ACTION_CETUS_SWAP against `TARGET`, up to TX_LIMIT per call and
+/// PERIOD_LIMIT per period. Vault is funded after creation, since
+/// create_agent_cap no longer takes an existing vault reference.
 fun setup(scenario: &mut ts::Scenario) {
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::create_vault(scenario.ctx());
-    scenario.next_tx(OWNER);
-
-    let mut vault = scenario.take_shared<Vault>();
-    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
-    capability::deposit(&mut vault, funding, scenario.ctx());
-
     capability::create_agent_cap(
-        &vault,
         OPERATOR,
         TX_LIMIT,
         PERIOD_LIMIT,
         PERIOD_LENGTH_MS,
         vector[ACTION_TRANSFER, ACTION_SWAP, ACTION_CETUS_SWAP],
         vector[TARGET],
-        vector[],
+        vector[], // no protocol-required targets for this generic test cap
         RISK_THRESHOLD,
         EXPIRY_MS,
         &clock,
         scenario.ctx(),
     );
+    scenario.next_tx(OWNER);
+
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
 
     ts::return_shared(vault);
     clock.destroy_for_testing();
@@ -435,12 +433,6 @@ fun execute_mock_swap_delivers_mock_usdc_to_owner() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::create_vault(scenario.ctx());
-    scenario.next_tx(OWNER);
-    let mut vault = scenario.take_shared<Vault>();
-    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
-    capability::deposit(&mut vault, funding, scenario.ctx());
-
     let pool_sui = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
     let pool_usdc = coin::mint_for_testing<MOCK_USDC>(9_500_000_000, scenario.ctx());
     mock_dex::create_pool(pool_sui, pool_usdc, MOCK_RATE_USDC_PER_SUI, scenario.ctx());
@@ -449,19 +441,22 @@ fun execute_mock_swap_delivers_mock_usdc_to_owner() {
     let pool_address = object::id(&pool).to_address();
 
     capability::create_agent_cap(
-        &vault,
         OPERATOR,
         TX_LIMIT,
         PERIOD_LIMIT,
         PERIOD_LENGTH_MS,
         vector[ACTION_SWAP], // == ACTION_MOCK_SWAP
         vector[pool_address],
-        vector[pool_address],
+        vector[pool_address], // protocol-required — mock swap depends on this pool
         RISK_THRESHOLD,
         EXPIRY_MS,
         &clock,
         scenario.ctx(),
     );
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
     ts::return_shared(vault);
 
     scenario.next_tx(OPERATOR);
@@ -509,26 +504,23 @@ fun execute_stake_delivers_staked_sui_to_owner() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::create_vault(scenario.ctx());
-    scenario.next_tx(OWNER);
-    let mut vault = scenario.take_shared<Vault>();
-    let funding = coin::mint_for_testing<SUI>(STAKE_AMOUNT, scenario.ctx());
-    capability::deposit(&mut vault, funding, scenario.ctx());
-
     capability::create_agent_cap(
-        &vault,
         OPERATOR,
         STAKE_AMOUNT,
         STAKE_AMOUNT,
         PERIOD_LENGTH_MS,
         vector[ACTION_STAKE],
         vector[VALIDATOR],
-        vector[VALIDATOR],
+        vector[VALIDATOR], // protocol-required — staking depends on this validator
         RISK_THRESHOLD,
         EXPIRY_MS,
         &clock,
         scenario.ctx(),
     );
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(STAKE_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
     ts::return_shared(vault);
 
     // Spin up a single-validator SuiSystemState via the framework's own
@@ -575,7 +567,8 @@ fun execute_stake_delivers_staked_sui_to_owner() {
 #[test]
 fun add_and_remove_allowed_target_by_owner_succeeds() {
     let mut scenario = ts::begin(OWNER);
-    setup (&mut scenario);
+    setup(&mut scenario);
+
     scenario.next_tx(OWNER);
     let mut cap = scenario.take_shared<AgentCap>();
 
@@ -621,12 +614,6 @@ fun remove_protocol_required_target_aborts_even_for_owner() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::create_vault(scenario.ctx());
-    scenario.next_tx(OWNER);
-    let mut vault = scenario.take_shared<Vault>();
-    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
-    capability::deposit(&mut vault, funding, scenario.ctx());
-
     let pool_sui = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
     let pool_usdc = coin::mint_for_testing<MOCK_USDC>(9_500_000_000, scenario.ctx());
     mock_dex::create_pool(pool_sui, pool_usdc, MOCK_RATE_USDC_PER_SUI, scenario.ctx());
@@ -636,10 +623,14 @@ fun remove_protocol_required_target_aborts_even_for_owner() {
     ts::return_shared(pool);
 
     capability::create_agent_cap(
-        &vault, OPERATOR, TX_LIMIT, PERIOD_LIMIT, PERIOD_LENGTH_MS,
+        OPERATOR, TX_LIMIT, PERIOD_LIMIT, PERIOD_LENGTH_MS,
         vector[ACTION_SWAP], vector[pool_address], vector[pool_address],
         RISK_THRESHOLD, EXPIRY_MS, &clock, scenario.ctx(),
     );
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
     ts::return_shared(vault);
     clock.destroy_for_testing();
 
@@ -661,12 +652,6 @@ fun non_protocol_target_still_removable_when_cap_has_protocol_targets() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx());
 
-    capability::create_vault(scenario.ctx());
-    scenario.next_tx(OWNER);
-    let mut vault = scenario.take_shared<Vault>();
-    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
-    capability::deposit(&mut vault, funding, scenario.ctx());
-
     let pool_sui = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
     let pool_usdc = coin::mint_for_testing<MOCK_USDC>(9_500_000_000, scenario.ctx());
     mock_dex::create_pool(pool_sui, pool_usdc, MOCK_RATE_USDC_PER_SUI, scenario.ctx());
@@ -676,10 +661,14 @@ fun non_protocol_target_still_removable_when_cap_has_protocol_targets() {
     ts::return_shared(pool);
 
     capability::create_agent_cap(
-        &vault, OPERATOR, TX_LIMIT, PERIOD_LIMIT, PERIOD_LENGTH_MS,
+        OPERATOR, TX_LIMIT, PERIOD_LIMIT, PERIOD_LENGTH_MS,
         vector[ACTION_SWAP, ACTION_TRANSFER], vector[pool_address, TARGET], vector[pool_address],
         RISK_THRESHOLD, EXPIRY_MS, &clock, scenario.ctx(),
     );
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let funding = coin::mint_for_testing<SUI>(DEPOSIT_AMOUNT, scenario.ctx());
+    capability::deposit(&mut vault, funding, scenario.ctx());
     ts::return_shared(vault);
     clock.destroy_for_testing();
 
@@ -759,9 +748,38 @@ fun updated_spending_limit_is_enforced_on_next_execution() {
     capability::execute_transfer(
         &mut cap, &mut vault, TARGET, 50_000, RISK_THRESHOLD, &clock, scenario.ctx(),
     );
-
     ts::return_shared(vault);
     ts::return_shared(cap);
     clock.destroy_for_testing();
+    scenario.end();
+}
+
+/* withdraw — owner reclaiming vault funds directly, no cap involved */
+
+#[test]
+fun withdraw_returns_coin_to_owner() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario); // deposits DEPOSIT_AMOUNT into the vault
+
+    scenario.next_tx(OWNER);
+    let mut vault = scenario.take_shared<Vault>();
+    let withdrawn = capability::withdraw(&mut vault, 100_000, scenario.ctx());
+    assert_eq!(withdrawn.value(), 100_000);
+    destroy(withdrawn);
+
+    ts::return_shared(vault);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENotOwner, location = capability)]
+fun withdraw_by_non_owner_aborts() {
+    let mut scenario = ts::begin(OWNER);
+    setup(&mut scenario);
+
+    scenario.next_tx(ATTACKER);
+    let mut vault = scenario.take_shared<Vault>();
+    let withdrawn = capability::withdraw(&mut vault, 100_000, scenario.ctx());
+    destroy(withdrawn);
+    ts::return_shared(vault);
     scenario.end();
 }
