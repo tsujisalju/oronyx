@@ -57,10 +57,10 @@ public struct AgentCap has key {
     allowed_actions: VecSet<u8>,
     allowed_targets: VecSet<address>,
     /// Subset of allowed_targets that a currently-enabled action type
-    /// structurally depends on (a DeFi pool, a validator address).
-    /// They need to be protected from removal via remove_allowed_target
-    /// so the user can't accidentally break an action by editing their
-    /// target whitelist. Populated once at cap creation, not independently user-editable.
+    /// structurally depends on (a DeFi pool, a validator address) —
+    /// protected from removal via remove_allowed_target so the user can't
+    /// accidentally break an action by editing their target whitelist.
+    /// Populated once at cap creation; not independently user-editable.
     protocol_targets: VecSet<address>,
     risk_threshold: u8,
     expiry_ms: u64,
@@ -124,40 +124,52 @@ public struct CapDeactivated has copy, drop {
 
 /* Vault Functions */
 
-public fun create_vault(ctx: &mut TxContext) {
-    let vault = Vault {
-        id: object::new(ctx),
-        owner: ctx.sender(),
-        balance: balance::zero(),
-    };
-    transfer::share_object(vault);
-}
-
+/// Lets the user deposit funds to the shared vault. The agent can only make
+/// use of funds in the vault, not directly from the user's wallet.
 public fun deposit(vault: &mut Vault, payment: Coin<SUI>, ctx: &TxContext) {
     assert!(vault.owner == ctx.sender(), ENotOwner);
     coin::put(&mut vault.balance, payment);
 }
 
+/// Lets the user reclaim funds directly, independent of any agent action
+/// or policy. Deliberately takes no AgentCap, this is the owner exercising
+/// ownership of their own vault, not something an agent policy governs.
+public fun withdraw(vault: &mut Vault, amount: u64, ctx: &mut TxContext): Coin<SUI> {
+    assert!(vault.owner == ctx.sender(), ENotOwner);
+    coin::take(&mut vault.balance, amount, ctx)
+}
+
 /* AgentCap Lifecycle */
 
+/// Creates a vault and its governing AgentCap together, in one call, one
+/// signature. Vaults are 1:1 with agents — there is no standalone
+/// vault-creation entrypoint, so a vault can never exist without a cap
+/// already governing it.
 public fun create_agent_cap(
-    vault: &Vault,
     operator: address,
     spending_limit_per_tx: u64,
     spending_limit_period: u64,
     period_length_ms: u64,
     allowed_actions: vector<u8>,
     allowed_targets: vector<address>,
-    // The caller is responsible for declaring these based on which
-    // allowed_actions are set. They are automatically unioned into
-    // allowed_targets.
+    // Addresses a currently-enabled action type structurally depends on
+    // (e.g. a MockPool or validator address) — the caller (executor/
+    // frontend) is responsible for declaring these based on which
+    // allowed_actions are set. Every protocol target is automatically
+    // included in allowed_targets even if not separately listed there,
+    // and is protected from later removal via remove_allowed_target.
     protocol_targets: vector<address>,
     risk_threshold: u8,
     expiry_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(vault.owner == ctx.sender(), ENotOwner);
+    let vault = Vault {
+        id: object::new(ctx),
+        owner: ctx.sender(),
+        balance: balance::zero(),
+    };
+    let vault_id = object::id(&vault);
 
     let mut targets = vec_set::from_keys(allowed_targets);
     let mut i = 0;
@@ -173,7 +185,7 @@ public fun create_agent_cap(
 
     let cap = AgentCap {
         id: object::new(ctx),
-        vault_id: object::id(vault),
+        vault_id,
         owner: ctx.sender(),
         operator,
         spending_limit_per_tx,
@@ -191,10 +203,12 @@ public fun create_agent_cap(
 
     event::emit(CapCreated {
         cap_id: object::id(&cap),
-        vault_id: object::id(vault),
+        vault_id,
         owner: cap.owner,
         operator: cap.operator,
     });
+
+    transfer::share_object(vault);
     transfer::share_object(cap);
 }
 
