@@ -9,6 +9,7 @@ transaction level rather than relying on off-chain promises.
 
 **Vault** — a shared object holding a user's deposited `SUI` balance. The
 vault itself has no policy logic; it only tracks ownership and balance.
+Vaults are 1:1 with agents — see "Vault lifecycle" below.
 
 **AgentCap** — a shared object encoding one agent's authorization: which
 actions it may perform, on which targets, up to what spending limits, until
@@ -18,6 +19,28 @@ review instead of auto-executed.
 **PendingAction** — a user-owned object representing an action that exceeded
 the agent's risk threshold. Created automatically by `execute_action`;
 resolved later by the user calling `approve_pending` or `reject_pending`.
+
+## Vault lifecycle: 1:1 with agents
+
+There is no standalone vault-creation entrypoint. `create_agent_cap` creates
+a `Vault` and its governing `AgentCap` together, in one call, one user
+signature — a vault can never exist without a cap already governing it, and
+an agent can never reference a vault it doesn't own.
+
+This was a deliberate scope decision, not an oversight. A shared vault
+usable by multiple agents was considered and rejected for now: two agents
+could each individually respect their own `spending_limit_period` while
+collectively draining a shared vault faster than either policy alone
+implies, since neither cap's accounting is aware of the other. Multi-agent
+vaults may be worth revisiting later, but the conflict-of-decisions problem
+needs a real answer first, not just a UI that allows it.
+
+`withdraw(vault, amount, ctx) -> Coin<SUI>` lets the owner reclaim funds
+directly — no `AgentCap` involved, deliberately kept outside the
+policy-enforcement path since it's the user exercising ownership of their
+own vault, not an agent action. Combined with `deactivate`, this gives the
+user a full exit path independent of whether the agent or backend is
+trusted, online, or even compromised.
 
 ## Why shared objects, not owned objects
 
@@ -30,7 +53,7 @@ against `owner` and `operator` fields instead of Sui's object-ownership
 system.
 
 - `owner` — the user. Can deactivate the cap, approve or reject a
-  `PendingAction`.
+  `PendingAction`, withdraw from the vault, and edit policy fields.
 - `operator` — the backend's own address (see `/executor`). The only address
   allowed to call any of the `execute_*` functions.
 
@@ -144,12 +167,19 @@ sui client publish --gas-budget 200000000
 ```
 
 Record the resulting package ID from the publish output (also saved to
-`Published.toml` under `[published.testnet]`). Post-publish setup —
-creating a vault, depositing funds, creating an agent cap, and (for the mock
-swap path) minting `MOCK_USDC` and creating a `MockPool` — is not part of
-`publish`; see `post-deploy.sh` for the sequence of `sui client call`
-commands. When creating an agent cap intended to use `execute_mock_swap`,
-make sure the `MockPool`'s object address is included in `allowed_targets`.
+`Published.toml` under `[published.testnet]`). Post-publish setup — minting
+`MOCK_USDC`, creating a `MockPool`, creating an agent cap (which creates its
+paired vault in the same call), and depositing funds — is not part of
+`publish`; see `post-deploy.sh` for the full sequence of `sui client call`
+commands. Note that the `MockPool` must be created **before** the agent
+cap if the cap is intended to use `execute_mock_swap`, since its object
+address needs to go into both `allowed_targets` and `protocol_targets` at
+cap-creation time.
+
+`create_agent_cap` no longer takes a vault argument — it creates one
+internally and shares both objects in the same transaction. Note both the
+resulting `Vault` object ID and `AgentCap` object ID from the call's output;
+the vault ID is needed for the subsequent `deposit` call.
 
 The `create_agent_cap` and `execute_*` calls take a shared `Clock` object as
 input — always `0x6` on any Sui network. `execute_stake` additionally takes
