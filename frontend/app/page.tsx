@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import OronyxLogo from "@/components/icons/oronyx-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import OronyxLogomark from "@/components/icons/oronyx-logomark";
 
 export default function Home() {
   return (
@@ -12,13 +12,9 @@ export default function Home() {
       <div className="mx-auto grid min-h-screen max-w-7xl place-items-center px-8 py-16 lg:px-16">
         <Card className="w-full max-w-4xl border-border/70 bg-card/70 shadow-xl">
           <CardContent className="grid gap-8 p-8 md:p-12">
-            <div className="flex items-center gap-3">
-              <OronyxLogo className="size-10" />
-              <p className="font-display text-2xl font-light">Oronyx</p>
-            </div>
-
+            <OronyxLogomark />
             <div className="max-w-3xl">
-              <h1 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
+              <h1 className="font-sans text-4xl font-bold tracking-tight md:text-6xl">
                 Agentic DeFi on Your Terms
               </h1>
               <p className="mt-5 text-lg leading-8 text-muted-foreground">

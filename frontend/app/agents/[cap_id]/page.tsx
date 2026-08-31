@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Power, Vault } from "lucide-react";
 
@@ -20,13 +20,9 @@ export default function AgentPage() {
   const params = useParams();
   const router = useRouter();
   const agentId = params.cap_id as string;
+  const foundAgent = loadAgents().find((item) => item.id === agentId);
 
-  const [agent, setAgent] = useState<Agent | null>(null);
-
-  useEffect(() => {
-    const foundAgent = loadAgents().find((item) => item.id === agentId);
-    setAgent(foundAgent || null);
-  }, [agentId]);
+  const [agent, setAgent] = useState<Agent | null>(foundAgent || null);
 
   function persist(updatedAgent: Agent) {
     saveAgent(updatedAgent);
@@ -69,7 +65,10 @@ export default function AgentPage() {
               </CardDescription>
             </CardHeader>
             <CardFooter>
-              <Button onClick={() => router.push("/agents")} className="rounded-lg">
+              <Button
+                onClick={() => router.push("/agents")}
+                className="rounded-lg"
+              >
                 Back to Agents
               </Button>
             </CardFooter>
@@ -120,7 +119,9 @@ export default function AgentPage() {
               <Vault className="size-5 text-muted-foreground" />
               <div>
                 <CardTitle>Agent Vault</CardTitle>
-                <CardDescription>Mock balance controls for frontend testing.</CardDescription>
+                <CardDescription>
+                  Mock balance controls for frontend testing.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -165,7 +166,9 @@ export default function AgentPage() {
               <p className="mt-1 text-lg font-medium">{agent.riskThreshold}</p>
             </div>
             <div className="rounded-lg border bg-muted/20 p-4">
-              <p className="text-sm text-muted-foreground">Per-Tx Spending Limit</p>
+              <p className="text-sm text-muted-foreground">
+                Per-Tx Spending Limit
+              </p>
               <p className="mt-1 text-lg font-medium">{agent.spendingLimit}</p>
             </div>
           </CardContent>
@@ -186,7 +189,9 @@ export default function AgentPage() {
               className="rounded-lg"
             >
               <Power className="size-4" />
-              {agent.status === "INACTIVE" ? "Agent Deactivated" : "Deactivate Agent"}
+              {agent.status === "INACTIVE"
+                ? "Agent Deactivated"
+                : "Deactivate Agent"}
             </Button>
           </CardFooter>
         </Card>

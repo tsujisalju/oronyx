@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -15,14 +15,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Agent, defaultAgents, loadAgents } from "@/lib/agents";
+import { Agent, loadAgents } from "@/lib/agents";
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>(defaultAgents);
-
-  useEffect(() => {
-    setAgents(loadAgents());
-  }, []);
+  const [agents] = useState<Agent[]>(loadAgents());
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -67,15 +63,21 @@ export default function AgentsPage() {
 
               <CardContent>
                 <p className="text-sm text-muted-foreground">Vault Balance</p>
-                <p className="mt-1 text-3xl font-semibold">{agent.vaultBalance}</p>
+                <p className="mt-1 text-3xl font-semibold">
+                  {agent.vaultBalance}
+                </p>
 
                 <div className="mt-6 grid grid-cols-2 gap-4 border-t pt-5">
                   <div>
-                    <p className="text-sm text-muted-foreground">Risk Threshold</p>
+                    <p className="text-sm text-muted-foreground">
+                      Risk Threshold
+                    </p>
                     <p className="mt-1 font-medium">{agent.riskThreshold}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Per-Tx Limit</p>
+                    <p className="text-sm text-muted-foreground">
+                      Per-Tx Limit
+                    </p>
                     <p className="mt-1 font-medium">{agent.spendingLimit}</p>
                   </div>
                 </div>
@@ -90,7 +92,8 @@ export default function AgentsPage() {
                 </Link>
 
                 <span className="text-xs text-muted-foreground">
-                  Deposit, withdraw, deactivate, and policy controls are available inside.
+                  Deposit, withdraw, deactivate, and policy controls are
+                  available inside.
                 </span>
               </CardFooter>
             </Card>

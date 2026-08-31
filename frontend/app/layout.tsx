@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import {
-  Geist,
-  Geist_Mono,
-  Roboto,
-  Stack_Sans_Headline,
-} from "next/font/google";
+import { Roboto, Stack_Sans_Headline } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import Header from "@/components/ui/header";
+import Providers from "./providers";
 
 const stackSansHeadline = Stack_Sans_Headline({
   subsets: ["latin"],
@@ -33,7 +30,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         "dark",
       )}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Providers>
+          <Header />
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }
