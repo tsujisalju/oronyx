@@ -1,0 +1,549 @@
+"use client";
+import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Pencil, Power, Vault } from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+import { Agent, loadMockAgents, saveMockAgent } from "@/lib/agents";
+
+export default function AgentPage() {
+  const params = useParams();
+  const router = useRouter();
+
+  const agentId = params.cap_id as string;
+  const foundAgent = loadMockAgents().find((item) => item.id === agentId);
+
+  const [agent, setAgent] = useState<Agent | null>(foundAgent || null);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+
+  function persist(updatedAgent: Agent) {
+    saveMockAgent(updatedAgent);
+    setAgent(updatedAgent);
+  }
+
+  function handleDeposit() {
+    if (!agent) return;
+
+    const amount = Number.parseFloat(depositAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const currentBalance = Number.parseFloat(agent.vaultBalance) || 0;
+
+    persist({
+      ...agent,
+      vaultBalance: `${(currentBalance + amount).toFixed(2)} SUI`,
+    });
+
+    toast.success("Deposit successful", {
+      description: `${amount.toFixed(2)} SUI was added to ${agent.name}'s vault.`,
+    });
+
+    setDepositAmount("");
+    setDepositOpen(false);
+  }
+
+  function handleWithdraw() {
+    if (!agent) return;
+
+    const amount = Number.parseFloat(withdrawAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const currentBalance = Number.parseFloat(agent.vaultBalance) || 0;
+
+    if (amount > currentBalance) return;
+
+    persist({
+      ...agent,
+      vaultBalance: `${(currentBalance - amount).toFixed(2)} SUI`,
+    });
+
+    toast.success("Withdrawal successful", {
+      description: `${amount.toFixed(2)} SUI was withdrawn from ${agent.name}'s vault.`,
+    });
+
+    setWithdrawAmount("");
+    setWithdrawOpen(false);
+  }
+
+  function handleDeactivate() {
+    if (!agent) return;
+
+    persist({
+      ...agent,
+      status: "INACTIVE",
+    });
+
+    toast.success("Agent deactivated", {
+      description: `${agent.name} can no longer perform autonomous actions.`,
+    });
+  }
+
+  function handleActivate() {
+    if (!agent) return;
+
+    persist({
+      ...agent,
+      status: "ACTIVE",
+    });
+
+    toast.success("Agent activated", {
+      description: `${agent.name} can perform autonomous actions again.`,
+    });
+  }
+
+  if (!agent) {
+    return (
+      <main className="min-h-screen bg-background text-foreground">
+        <div className="mx-auto max-w-5xl px-8 py-10">
+          <Card>
+            <CardHeader>
+              <CardTitle>Agent not found</CardTitle>
+
+              <CardDescription>
+                The requested agent does not exist in the current mock data.
+              </CardDescription>
+            </CardHeader>
+
+            <CardFooter>
+              <Button
+                onClick={() => router.push("/agents")}
+                className="rounded-lg"
+              >
+                Back to Agents
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </main>
+    );
+  }
+
+  const numericBalance = Number.parseFloat(agent.vaultBalance) || 0;
+
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-5xl px-8 py-10">
+        {/* BACK BUTTON */}
+
+        <Button
+          variant="ghost"
+          className="mb-6 -ml-3 rounded-lg"
+          onClick={() => router.push("/agents")}
+        >
+          <ArrowLeft className="size-4" />
+          Back to Agents
+        </Button>
+
+        {/* HEADER */}
+
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Autonomous Agent</p>
+
+            <h1 className="mt-1 text-3xl font-semibold">{agent.name}</h1>
+
+            <p className="mt-2 text-muted-foreground">
+              Manage this agent&apos;s vault, status, and policy.
+            </p>
+          </div>
+
+          <Badge
+            variant="outline"
+            className={
+              agent.status === "ACTIVE"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }
+          >
+            {agent.status}
+          </Badge>
+        </div>
+
+        {/* VAULT */}
+
+        <Card className="mt-10">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Vault className="size-6 text-muted-foreground" />
+              <div>
+                <CardTitle>Agent Vault</CardTitle>
+                <CardDescription>
+                  Mock balance controls for frontend testing.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Vault Balance</p>
+
+            <p className="mt-1 text-3xl font-semibold">{agent.vaultBalance}</p>
+          </CardContent>
+
+          <CardFooter className="gap-3 border-t pt-5">
+            {/* DEPOSIT */}
+
+            <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
+              <DialogTrigger render={<Button className="rounded-lg" />}>
+                Deposit
+              </DialogTrigger>
+
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Deposit to Vault</DialogTitle>
+
+                  <DialogDescription>
+                    Add SUI to {agent.name}&apos;s vault.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-4 py-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="deposit-amount">Amount</Label>
+
+                    <div className="relative">
+                      <Input
+                        id="deposit-amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={depositAmount}
+                        onChange={(event) =>
+                          setDepositAmount(event.target.value)
+                        }
+                        placeholder="0.00"
+                        className="pr-14"
+                      />
+
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        SUI
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-sm text-muted-foreground">
+                      Current Balance
+                    </p>
+
+                    <p className="mt-1 font-medium">{agent.vaultBalance}</p>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDepositOpen(false);
+                      setDepositAmount("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    onClick={handleDeposit}
+                    disabled={
+                      !Number.isFinite(Number.parseFloat(depositAmount)) ||
+                      Number.parseFloat(depositAmount) <= 0
+                    }
+                  >
+                    Deposit
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* WITHDRAW */}
+
+            <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+              <DialogTrigger
+                render={<Button variant="outline" className="rounded-lg" />}
+              >
+                Withdraw
+              </DialogTrigger>
+
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Withdraw from Vault</DialogTitle>
+
+                  <DialogDescription>
+                    Withdraw SUI from {agent.name}&apos;s vault.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-4 py-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="withdraw-amount">Amount</Label>
+
+                    <div className="relative">
+                      <Input
+                        id="withdraw-amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={withdrawAmount}
+                        onChange={(event) =>
+                          setWithdrawAmount(event.target.value)
+                        }
+                        placeholder="0.00"
+                        className="pr-14"
+                      />
+
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        SUI
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-sm text-muted-foreground">
+                      Available Balance
+                    </p>
+
+                    <p className="mt-1 font-medium">{agent.vaultBalance}</p>
+                  </div>
+
+                  {Number.parseFloat(withdrawAmount) > numericBalance && (
+                    <p className="text-sm text-destructive">
+                      Withdrawal amount exceeds the available balance.
+                    </p>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setWithdrawOpen(false);
+                      setWithdrawAmount("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    onClick={handleWithdraw}
+                    disabled={
+                      !Number.isFinite(Number.parseFloat(withdrawAmount)) ||
+                      Number.parseFloat(withdrawAmount) <= 0 ||
+                      Number.parseFloat(withdrawAmount) > numericBalance
+                    }
+                  >
+                    Withdraw
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardFooter>
+        </Card>
+
+        {/* POLICY */}
+
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div className="grid gap-1">
+              <CardDescription>Agent Policy</CardDescription>
+
+              <CardTitle className="text-xl">Policy Configuration</CardTitle>
+            </div>
+
+            <Button
+              variant="outline"
+              className="rounded-lg"
+              onClick={() => router.push(`/agents/${agent.id}/edit`)}
+            >
+              <Pencil className="size-4" />
+              Edit Policy
+            </Button>
+          </CardHeader>
+
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Risk Threshold</p>
+
+              <p className="mt-1 text-lg font-medium">{agent.riskThreshold}</p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">
+                Per-Tx Spending Limit
+              </p>
+
+              <p className="mt-1 text-lg font-medium">{agent.spendingLimit}</p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">
+                Period Spending Limit
+              </p>
+
+              <p className="mt-1 text-lg font-medium">
+                {agent.periodLimit ?? "Not configured"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Period Length</p>
+
+              <p className="mt-1 text-lg font-medium">
+                {agent.periodLength ?? "Not configured"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Policy Expiry</p>
+
+              <p className="mt-1 text-lg font-medium">
+                {agent.expiry ?? "Not configured"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Allowed Actions</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {agent.allowedActions?.length ? (
+                  agent.allowedActions.map((action) => (
+                    <Badge key={action} variant="secondary">
+                      {action}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    Not configured
+                  </span>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* AGENT STATUS */}
+
+        <Card className="mt-6 border-destructive/30">
+          <CardHeader>
+            <CardTitle>Agent Status</CardTitle>
+
+            <CardDescription>
+              {agent.status === "ACTIVE"
+                ? "Deactivating an agent prevents it from performing new actions."
+                : "This agent is inactive and cannot perform autonomous actions."}
+            </CardDescription>
+          </CardHeader>
+
+          <CardFooter>
+            {agent.status === "ACTIVE" ? (
+              <AlertDialog key="deactivate-dialog">
+                <AlertDialogTrigger
+                  render={
+                    <Button variant="destructive" className="rounded-lg" />
+                  }
+                >
+                  <Power className="size-4" />
+                  Deactivate Agent
+                </AlertDialogTrigger>
+
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Deactivate {agent.name}?
+                    </AlertDialogTitle>
+
+                    <AlertDialogDescription>
+                      This agent will no longer be able to perform new actions.
+                      Its current policy and vault information will be
+                      preserved.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+
+                    <AlertDialogAction
+                      onClick={handleDeactivate}
+                      className="bg-destructive text-white hover:bg-destructive/90"
+                    >
+                      <Power className="size-4" />
+                      Deactivate Agent
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <AlertDialog key="activate-dialog">
+                <AlertDialogTrigger render={<Button className="rounded-lg" />}>
+                  <Power className="size-4" />
+                  Activate Agent
+                </AlertDialogTrigger>
+
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Activate {agent.name}?</AlertDialogTitle>
+
+                    <AlertDialogDescription>
+                      This agent will be allowed to perform autonomous actions
+                      again according to its current policy.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+
+                    <AlertDialogAction onClick={handleActivate}>
+                      <Power className="size-4" />
+                      Activate Agent
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </CardFooter>
+        </Card>
+      </div>
+    </main>
+  );
+}

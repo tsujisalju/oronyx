@@ -7,8 +7,11 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - frontend_npm_cache:/root/.npm
     environment:
       - NEXT_PUBLIC_AGENT_SERVICE_URL=http://localhost:8000
+    env_file:
+      - ./frontend/.env
     depends_on:
       - agent-service
 
@@ -34,5 +37,10 @@ services:
     volumes:
       - ./executor:/app
       - /app/node_modules
+      - executor_npm_cache:/root/.npm
     env_file:
       - ./executor/.env
+
+volumes:
+  frontend_npm_cache:
+  executor_npm_cache:

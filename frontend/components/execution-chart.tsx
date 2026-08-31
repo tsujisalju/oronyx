@@ -1,6 +1,12 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 
 import {
   LineChart,
@@ -8,8 +14,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
 
 interface Execution {
@@ -20,6 +24,13 @@ interface Execution {
 interface ExecutionChartProps {
   executions: Execution[];
 }
+
+const chartConfig = {
+  executions: {
+    label: "Executions",
+    color: "var(--chart-1)",
+  },
+} satisfies ChartConfig;
 
 export default function ExecutionChart({
   executions,
@@ -53,42 +64,36 @@ export default function ExecutionChart({
       </CardHeader>
 
       <CardContent className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer config={chartConfig} className="h-full w-full">
           <LineChart data={groupedData}>
 
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#27272a"
+              stroke="var(--border)"
             />
 
             <XAxis
               dataKey="time"
-              stroke="#71717a"
+              stroke="var(--muted-foreground)"
             />
 
             <YAxis
               allowDecimals={false}
-              stroke="#71717a"
+              stroke="var(--muted-foreground)"
             />
 
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "#18181b",
-                border: "1px solid #3f3f46",
-                borderRadius: "8px",
-              }}
-            />
+            <ChartTooltip content={<ChartTooltipContent />} />
 
             <Line
               type="monotone"
               dataKey="executions"
-              stroke="#ffffff"
+              stroke="var(--color-executions)"
               strokeWidth={2}
               dot={{ r: 4 }}
             />
 
           </LineChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

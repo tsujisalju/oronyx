@@ -1,17 +1,15 @@
 import type { Metadata } from "next";
-import { Toaster } from "@/components/ui/sonner";
-import {
-  Geist,
-  Geist_Mono,
-  Roboto,
-  Stack_Sans_Headline,
-} from "next/font/google";
+import { Roboto, Stack_Sans_Headline } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import Header from "@/components/header";
+import Providers from "./providers";
+import { Toaster } from "@/components/ui/sonner";
 
 const stackSansHeadline = Stack_Sans_Headline({
   subsets: ["latin"],
   variable: "--font-stack-sans-headline",
+  adjustFontFallback: false,
 });
 
 const roboto = Roboto({ subsets: ["latin"], variable: "--font-sans" });
@@ -34,8 +32,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         "dark",
       )}
     >
-      <body className="min-h-full flex flex-col">{children} 
-        <Toaster />
+      <body className="min-h-full flex flex-col">
+        <Providers>
+          <Header />
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );

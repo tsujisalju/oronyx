@@ -12,7 +12,7 @@ export type Agent = {
   expiry?: string;
 };
 
-export const defaultAgents: Agent[] = [
+export const mockAgents: Agent[] = [
   {
     id: "agent-1",
     name: "Yield Optimizer",
@@ -41,22 +41,20 @@ export const defaultAgents: Agent[] = [
   },
 ];
 
-
-
-export function loadAgents(): Agent[] {
+export function loadMockAgents(): Agent[] {
   const storedAgents: Agent[] = JSON.parse(
     localStorage.getItem("oronyx-agents") || "[]",
   );
 
   const storedIds = new Set(storedAgents.map((agent) => agent.id));
-  const unchangedDefaults = defaultAgents.filter(
+  const unchangedDefaults = mockAgents.filter(
     (agent) => !storedIds.has(agent.id),
   );
 
   return [...unchangedDefaults, ...storedAgents];
 }
 
-export function saveAgent(updatedAgent: Agent) {
+export function saveMockAgent(updatedAgent: Agent) {
   const storedAgents: Agent[] = JSON.parse(
     localStorage.getItem("oronyx-agents") || "[]",
   );
@@ -70,4 +68,3 @@ export function saveAgent(updatedAgent: Agent) {
 
   localStorage.setItem("oronyx-agents", JSON.stringify(nextAgents));
 }
-

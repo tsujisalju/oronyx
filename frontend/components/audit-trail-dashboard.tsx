@@ -2,11 +2,20 @@
 
 import { useState } from "react";
 
-import StatCard from "./StatCard";
-import ExecutionTable from "./ExecutionTable";
-import ExecutionChart from "./ExecutionChart";
-import RiskChart from "./RiskChart";
-import AgentPerformance from "./AgentPerformance";
+import StatCard from "./stat-card";
+import ExecutionTable from "./execution-table";
+import ExecutionChart from "./execution-chart";
+import RiskChart from "./risk-chart";
+import AgentPerformance from "./agent-performance";
+import { Label } from "./ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 const executions = [
   {
@@ -101,68 +110,50 @@ const executions = [
   },
 ];
 
-export default function Dashboard() {
+export default function AuditTrailDashboard() {
   // --------------------------------
   // FILTER
   // --------------------------------
 
-  const [selectedAgent, setSelectedAgent] =
-    useState("All Agents");
+  const [selectedAgent, setSelectedAgent] = useState("All Agents");
 
   const agents = [
     "All Agents",
-    ...new Set(
-      executions.map(
-        (execution) => execution.agent
-      )
-    ),
+    ...new Set(executions.map((execution) => execution.agent)),
   ];
 
   const filteredExecutions =
     selectedAgent === "All Agents"
       ? executions
-      : executions.filter(
-          (execution) =>
-            execution.agent === selectedAgent
-        );
+      : executions.filter((execution) => execution.agent === selectedAgent);
 
   // --------------------------------
   // ANALYTICS
   // --------------------------------
 
-  const totalExecutions =
-    filteredExecutions.length;
+  const totalExecutions = filteredExecutions.length;
 
-  const approvedExecutions =
-    filteredExecutions.filter(
-      (execution) =>
-        execution.status === "APPROVED"
-    ).length;
+  const approvedExecutions = filteredExecutions.filter(
+    (execution) => execution.status === "APPROVED",
+  ).length;
 
-  const flaggedExecutions =
-    filteredExecutions.filter(
-      (execution) =>
-        execution.status === "FLAGGED"
-    ).length;
+  const flaggedExecutions = filteredExecutions.filter(
+    (execution) => execution.status === "FLAGGED",
+  ).length;
 
   const approvalRate =
     totalExecutions === 0
       ? 0
-      : Math.round(
-          (approvedExecutions /
-            totalExecutions) *
-            100
-        );
+      : Math.round((approvedExecutions / totalExecutions) * 100);
 
   const averageRisk =
     totalExecutions === 0
       ? 0
       : Math.round(
           filteredExecutions.reduce(
-            (total, execution) =>
-              total + execution.risk,
-            0
-          ) / totalExecutions
+            (total, execution) => total + execution.risk,
+            0,
+          ) / totalExecutions,
         );
 
   // --------------------------------
@@ -171,112 +162,76 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
-
       <div className="mx-auto max-w-7xl px-8 py-10">
-
         {/* HEADER */}
 
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-
           <div>
-
-            <h1 className="text-3xl font-semibold">
-              Oronyx
-            </h1>
+            <h1 className="text-3xl font-display">Dashboard</h1>
 
             <p className="mt-2 text-zinc-400">
               Autonomous agent control center
             </p>
-
           </div>
 
           {/* AGENT FILTER */}
 
           <div>
+            <Label className="mb-2 text-zinc-400">Agent</Label>
 
-            <label className="mb-2 block text-sm text-zinc-400">
-              Agent
-            </label>
-
-            <select
+            <Select
               value={selectedAgent}
-              onChange={(event) =>
-                setSelectedAgent(
-                  event.target.value
-                )
-              }
-              className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-white outline-none"
+              onValueChange={(value) => {
+                if (typeof value === "string") {
+                  setSelectedAgent(value);
+                }
+              }}
             >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
 
-              {agents.map((agent) => (
-                <option
-                  key={agent}
-                  value={agent}
-                >
-                  {agent}
-                </option>
-              ))}
-
-            </select>
-
+              <SelectContent>
+                <SelectGroup>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent} value={agent}>
+                      {agent}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
-
         </div>
 
         {/* KPI CARDS */}
 
         <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <StatCard title="Active Agents" value={2} />
 
-          <StatCard
-            title="Active Agents"
-            value={2}
-          />
+          <StatCard title="Executions" value={totalExecutions} />
 
-          <StatCard
-            title="Executions"
-            value={totalExecutions}
-          />
+          <StatCard title="Approval Rate" value={approvalRate} />
 
-          <StatCard
-            title="Approval Rate"
-            value={approvalRate}
-          />
-
-          <StatCard
-            title="Average Risk"
-            value={averageRisk}
-          />
-
+          <StatCard title="Average Risk" value={averageRisk} />
         </div>
 
         {/* CHARTS */}
 
         <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <ExecutionChart executions={filteredExecutions} />
 
-          <ExecutionChart
-            executions={filteredExecutions}
-          />
-
-          <RiskChart
-            executions={filteredExecutions}
-          />
-
+          <RiskChart executions={filteredExecutions} />
         </div>
 
         {/* AGENT PERFORMANCE */}
 
-        <AgentPerformance
-          executions={executions}
-        />
+        <AgentPerformance executions={executions} />
 
         {/* EXECUTION TABLE */}
 
-        <ExecutionTable
-          executions={filteredExecutions}
-        />
-
+        <ExecutionTable executions={filteredExecutions} />
       </div>
-
     </main>
   );
 }
