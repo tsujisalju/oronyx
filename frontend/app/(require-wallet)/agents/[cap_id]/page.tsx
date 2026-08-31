@@ -41,14 +41,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { Agent, loadAgents, saveAgent } from "@/lib/agents";
+import { Agent, loadMockAgents, saveMockAgent } from "@/lib/agents";
 
 export default function AgentPage() {
   const params = useParams();
   const router = useRouter();
 
   const agentId = params.cap_id as string;
-  const foundAgent = loadAgents().find((item) => item.id === agentId);
+  const foundAgent = loadMockAgents().find((item) => item.id === agentId);
 
   const [agent, setAgent] = useState<Agent | null>(foundAgent || null);
   const [depositAmount, setDepositAmount] = useState("");
@@ -58,7 +58,7 @@ export default function AgentPage() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   function persist(updatedAgent: Agent) {
-    saveAgent(updatedAgent);
+    saveMockAgent(updatedAgent);
     setAgent(updatedAgent);
   }
 
@@ -207,11 +207,9 @@ export default function AgentPage() {
         <Card className="mt-10">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <Vault className="size-5 text-muted-foreground" />
-
+              <Vault className="size-6 text-muted-foreground" />
               <div>
                 <CardTitle>Agent Vault</CardTitle>
-
                 <CardDescription>
                   Mock balance controls for frontend testing.
                 </CardDescription>

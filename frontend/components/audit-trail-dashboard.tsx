@@ -7,6 +7,15 @@ import ExecutionTable from "./execution-table";
 import ExecutionChart from "./execution-chart";
 import RiskChart from "./risk-chart";
 import AgentPerformance from "./agent-performance";
+import { Label } from "./ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 const executions = [
   {
@@ -158,7 +167,7 @@ export default function AuditTrailDashboard() {
 
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">Oronyx</h1>
+            <h1 className="text-3xl font-display">Dashboard</h1>
 
             <p className="mt-2 text-zinc-400">
               Autonomous agent control center
@@ -168,19 +177,30 @@ export default function AuditTrailDashboard() {
           {/* AGENT FILTER */}
 
           <div>
-            <label className="mb-2 block text-sm text-zinc-400">Agent</label>
+            <Label className="mb-2 text-zinc-400">Agent</Label>
 
-            <select
+            <Select
               value={selectedAgent}
-              onChange={(event) => setSelectedAgent(event.target.value)}
-              className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-white outline-none"
+              onValueChange={(value) => {
+                if (typeof value === "string") {
+                  setSelectedAgent(value);
+                }
+              }}
             >
-              {agents.map((agent) => (
-                <option key={agent} value={agent}>
-                  {agent}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectGroup>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent} value={agent}>
+                      {agent}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

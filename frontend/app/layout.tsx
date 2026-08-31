@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { Roboto, Stack_Sans_Headline } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import Header from "@/components/ui/header";
+import Header from "@/components/header";
 import Providers from "./providers";
 import { Toaster } from "@/components/ui/sonner";
 
 const stackSansHeadline = Stack_Sans_Headline({
   subsets: ["latin"],
   variable: "--font-stack-sans-headline",
+  adjustFontFallback: false,
 });
 
 const roboto = Roboto({ subsets: ["latin"], variable: "--font-sans" });
