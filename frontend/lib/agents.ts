@@ -10,6 +10,13 @@ export type Agent = {
   periodLimit?: string;
   periodLength?: string;
   expiry?: string;
+
+  // Real on-chain object IDs from oronyx::capability::create_agent_cap.
+  // `id` is set equal to `capId` once an agent is chain-backed, since
+  // app/(require-wallet)/agents/[cap_id]/page.tsx already routes on
+  // `cap_id`. Optional for the still-present mock seed agents.
+  capId?: string;
+  vaultId?: string;
 };
 
 export const mockAgents: Agent[] = [
