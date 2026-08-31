@@ -5,6 +5,11 @@ export type Agent = {
   vaultBalance: string;
   riskThreshold: number;
   spendingLimit: string;
+
+  allowedActions?: string[];
+  periodLimit?: string;
+  periodLength?: string;
+  expiry?: string;
 };
 
 export const defaultAgents: Agent[] = [
@@ -15,6 +20,11 @@ export const defaultAgents: Agent[] = [
     vaultBalance: "2.45 SUI",
     riskThreshold: 60,
     spendingLimit: "0.50 SUI",
+
+    allowedActions: ["SWAP", "STAKE"],
+    periodLimit: "5.00 SUI",
+    periodLength: "24 hours",
+    expiry: "30 days",
   },
   {
     id: "agent-2",
@@ -23,8 +33,15 @@ export const defaultAgents: Agent[] = [
     vaultBalance: "1.20 SUI",
     riskThreshold: 75,
     spendingLimit: "0.30 SUI",
+
+    allowedActions: ["SWAP", "TRANSFER"],
+    periodLimit: "3.00 SUI",
+    periodLength: "24 hours",
+    expiry: "14 days",
   },
 ];
+
+
 
 export function loadAgents(): Agent[] {
   const storedAgents: Agent[] = JSON.parse(
@@ -53,3 +70,4 @@ export function saveAgent(updatedAgent: Agent) {
 
   localStorage.setItem("oronyx-agents", JSON.stringify(nextAgents));
 }
+
