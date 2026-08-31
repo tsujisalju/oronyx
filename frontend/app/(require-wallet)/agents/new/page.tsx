@@ -4,6 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { Transaction } from "@mysten/sui/transactions";
+import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
+
+import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,8 +48,35 @@ const PERIOD_OPTIONS = [
 
 const EXPIRY_OPTIONS = ["7 days", "14 days", "30 days", "60 days", "90 days"];
 
+// Mirrors oronyx::capability's private action-type codes. "SWAP" maps to
+// ACTION_MOCK_SWAP (not ACTION_CETUS_SWAP), consistent with this project's
+// established default of the mock DEX over Cetus for demo reliability.
+const ACTION_CODES: Record<string, number> = {
+  TRANSFER: 0,
+  SWAP: 1,
+  STAKE: 2,
+};
+
+const DURATION_MS: Record<string, number> = {
+  "1 hour": 3_600_000,
+  "6 hours": 6 * 3_600_000,
+  "12 hours": 12 * 3_600_000,
+  "24 hours": 24 * 3_600_000,
+  "7 days": 7 * 24 * 3_600_000,
+  "14 days": 14 * 24 * 3_600_000,
+  "30 days": 30 * 24 * 3_600_000,
+  "60 days": 60 * 24 * 3_600_000,
+  "90 days": 90 * 24 * 3_600_000,
+};
+
+const MIST_PER_SUI = 1_000_000_000;
+const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
+const OPERATOR_ADDR = process.env.NEXT_PUBLIC_ORONYX_OPERATOR_ADDR!;
+const MOCK_POOL_ID = process.env.NEXT_PUBLIC_ORONYX_MOCK_POOL_ID!;
+
 export default function NewAgentPage() {
   const router = useRouter();
+  const account = useCurrentAccount();
 
   const [agentName, setAgentName] = useState("");
 
@@ -96,44 +128,106 @@ export default function NewAgentPage() {
   async function handleCreateAgent() {
     if (formInvalid) return;
 
+    if (!account) {
+      toast.error("Connect a wallet first");
+      return;
+    }
+
     setIsCreating(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const actionCodes = selectedActions.map((action) => ACTION_CODES[action]);
+      // Only "SWAP" structurally depends on a protocol object today (the
+      // mock pool); "STAKE" needs no protocol_targets entry yet since
+      // there's no validator-picker field in this form — a stake-capable
+      // cap created here can have a validator added later via
+      // add_allowed_target.
+      const protocolTargets = selectedActions.includes("SWAP")
+        ? [MOCK_POOL_ID]
+        : [];
 
-    const newAgent: Agent = {
-      id: `agent-${Date.now()}`,
-      name: agentName.trim(),
-      status: "ACTIVE",
-      vaultBalance: "0.00 SUI",
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::capability::create_agent_cap`,
+        arguments: [
+          tx.pure.address(OPERATOR_ADDR),
+          tx.pure.u64(Math.round(numericSpendingLimit * MIST_PER_SUI)),
+          tx.pure.u64(Math.round(numericPeriodLimit * MIST_PER_SUI)),
+          tx.pure.u64(DURATION_MS[periodLength]),
+          tx.pure.vector("u8", actionCodes),
+          tx.pure.vector("address", []),
+          tx.pure.vector("address", protocolTargets),
+          tx.pure.u8(riskThreshold),
+          tx.pure.u64(Date.now() + DURATION_MS[expiry]),
+          tx.object(SUI_CLOCK_OBJECT_ID),
+        ],
+      });
 
-      riskThreshold,
+      const result = await signAndExecuteSponsoredTransaction({
+        transaction: tx,
+        sender: account.address,
+        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::create_agent_cap`],
+      });
 
-      spendingLimit: `${numericSpendingLimit.toFixed(2)} SUI`,
+      if (result.$kind !== "Transaction") {
+        throw new Error("Sponsored transaction failed");
+      }
 
-      allowedActions: selectedActions,
+      const objectTypes = result.Transaction.objectTypes ?? {};
+      const createdVaultId = Object.entries(objectTypes).find(([, type]) =>
+        type.endsWith("::capability::Vault"),
+      )?.[0];
+      const createdCapId = Object.entries(objectTypes).find(([, type]) =>
+        type.endsWith("::capability::AgentCap"),
+      )?.[0];
 
-      periodLimit: `${numericPeriodLimit.toFixed(2)} SUI`,
+      if (!createdVaultId || !createdCapId) {
+        throw new Error("Could not find created Vault/AgentCap in transaction result");
+      }
 
-      periodLength,
+      const newAgent: Agent = {
+        id: createdCapId,
+        capId: createdCapId,
+        vaultId: createdVaultId,
+        name: agentName.trim(),
+        status: "ACTIVE",
+        vaultBalance: "0.00 SUI",
 
-      expiry,
-    };
+        riskThreshold,
 
-    const existingAgents: Agent[] = JSON.parse(
-      localStorage.getItem("oronyx-agents") || "[]",
-    );
+        spendingLimit: `${numericSpendingLimit.toFixed(2)} SUI`,
 
-    localStorage.setItem(
-      "oronyx-agents",
-      JSON.stringify([...existingAgents, newAgent]),
-    );
+        allowedActions: selectedActions,
 
-    setIsCreating(false);
-    setCreated(true);
+        periodLimit: `${numericPeriodLimit.toFixed(2)} SUI`,
 
-    toast.success("Agent created", {
-      description: `${newAgent.name} has been created with the selected policy.`,
-    });
+        periodLength,
+
+        expiry,
+      };
+
+      const existingAgents: Agent[] = JSON.parse(
+        localStorage.getItem("oronyx-agents") || "[]",
+      );
+
+      localStorage.setItem(
+        "oronyx-agents",
+        JSON.stringify([...existingAgents, newAgent]),
+      );
+
+      setCreated(true);
+
+      toast.success("Agent created", {
+        description: `${newAgent.name} has been created with the selected policy.`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create agent", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   return (
