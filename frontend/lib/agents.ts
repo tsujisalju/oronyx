@@ -19,6 +19,11 @@ export type Agent = {
   // `cap_id`. Optional for the still-present mock seed agents.
   capId?: string;
   vaultId?: string;
+
+  // True when `name` came from saved agent-service metadata rather than
+  // being synthesized from capId — controls whether AgentCard shows the
+  // capId subtitle.
+  hasName?: boolean;
 };
 
 // GET /agents (agent-service) only returns identity/active-status today —
@@ -31,7 +36,10 @@ export function agentFromSummary(summary: AgentSummary): Agent {
     id: summary.cap_id,
     capId: summary.cap_id,
     vaultId: summary.vault_id,
-    name: `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
+    name:
+  summary.name ??
+  `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
+    hasName: summary.name != null,
     status: summary.active ? "ACTIVE" : "INACTIVE",
     vaultBalance: "—",
     riskThreshold: -1,
@@ -82,7 +90,10 @@ export function agentFromDetail(detail: AgentDetail): Agent {
     id: detail.cap_id,
     capId: detail.cap_id,
     vaultId: detail.vault_id,
-    name: `Agent ${detail.cap_id.slice(0, 6)}…${detail.cap_id.slice(-4)}`,
+    name:
+      detail.name ??
+      `Agent ${detail.cap_id.slice(0, 6)}…${detail.cap_id.slice(-4)}`,
+    hasName: detail.name != null,
     status: detail.active ? "ACTIVE" : "INACTIVE",
     vaultBalance: formatMist(detail.vault_balance),
     riskThreshold: detail.risk_threshold,

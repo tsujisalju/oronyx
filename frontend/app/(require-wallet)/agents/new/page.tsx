@@ -1,5 +1,5 @@
 "use client";
-
+import { saveAgentMetadata } from "@/lib/agent-service";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -267,6 +267,20 @@ export default function NewAgentPage() {
           "Could not find created Vault/AgentCap in transaction result",
         );
       }
+      try {
+  await saveAgentMetadata({
+    capId: createdCapId,
+    owner: account.address,
+    name: agentName.trim(),
+  });
+} catch (metadataError) {
+  console.error("Failed to save agent metadata:", metadataError);
+
+  toast.warning("Agent created, but its display name could not be saved", {
+    description:
+      "The on-chain agent was created successfully. You can still access it from the Agents page.",
+  });
+}
 
       const newAgent: Agent = {
         id: createdCapId,
@@ -289,14 +303,7 @@ export default function NewAgentPage() {
         expiry,
       };
 
-      const existingAgents: Agent[] = JSON.parse(
-        localStorage.getItem("oronyx-agents") || "[]",
-      );
-
-      localStorage.setItem(
-        "oronyx-agents",
-        JSON.stringify([...existingAgents, newAgent]),
-      );
+      
 
       setCreated(true);
 
@@ -758,7 +765,7 @@ export default function NewAgentPage() {
               </div>
 
               <CardDescription>
-                {agentName} has been saved locally with its configured policy.
+               {agentName} has been created with its configured policy.
               </CardDescription>
             </CardHeader>
 
