@@ -31,7 +31,9 @@ export function agentFromSummary(summary: AgentSummary): Agent {
     id: summary.cap_id,
     capId: summary.cap_id,
     vaultId: summary.vault_id,
-    name: `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
+    name:
+  summary.name ??
+  `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
     status: summary.active ? "ACTIVE" : "INACTIVE",
     vaultBalance: "—",
     riskThreshold: -1,

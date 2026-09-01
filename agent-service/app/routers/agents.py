@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from app.models.agent import AgentSummary
-from app.services import sui_events
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
+
+from app.models.agent import AgentMetadataCreate, AgentSummary
+from app.services import agent_metadata, sui_events
 
 router = APIRouter()
 
@@ -21,9 +22,33 @@ async def list_agents(
             owner=cap.owner,
             operator=cap.operator,
             active=cap.cap_id not in deactivated_ids,
+            name=agent_metadata.get_agent_name(cap.cap_id),
         )
         for cap in created
     ]
+
+
+@router.post("/metadata")
+def save_metadata(metadata: AgentMetadataCreate):
+    name = metadata.name.strip()
+
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Agent name cannot be empty",
+        )
+
+    agent_metadata.save_agent_metadata(
+        cap_id=metadata.cap_id,
+        owner=metadata.owner,
+        name=name,
+    )
+
+    return {
+        "status": "ok",
+        "cap_id": metadata.cap_id,
+        "name": name,
+    }
 
 
 @router.post("/parse-policy")

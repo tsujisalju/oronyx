@@ -29,6 +29,11 @@ export default function AgentCard({ agent }: { agent: Agent }) {
         <div className="grid gap-1">
           <CardDescription>Autonomous Agent</CardDescription>
           <CardTitle className="text-xl">{agent.name}</CardTitle>
+          {agent.capId && (
+  <p className="font-mono text-xs text-muted-foreground">
+    {agent.capId.slice(0, 8)}…{agent.capId.slice(-6)}
+  </p>
+)}
         </div>
 
         <Badge

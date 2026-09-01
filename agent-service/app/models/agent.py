@@ -7,3 +7,9 @@ class AgentSummary(BaseModel):
     owner: str
     operator: str
     active: bool
+    name: str | None = None
+
+class AgentMetadataCreate(BaseModel):
+    cap_id: str
+    owner: str
+    name: str
