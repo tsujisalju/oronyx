@@ -10,7 +10,9 @@ httptools==0.8.0
 httpx==0.28.1
 idna==3.19
 pydantic==2.13.4
+pydantic-settings==2.15.0
 pydantic_core==2.46.4
+pysui==1.4.1
 python-dotenv==1.2.3
 PyYAML==6.0.3
 starlette==1.6.0

@@ -41,22 +41,208 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { Agent, loadMockAgents, saveMockAgent } from "@/lib/agents";
+import { Agent, agentFromDetail, saveMockAgent } from "@/lib/agents";
+import { getAgent } from "@/lib/agent-service";
+
+function AgentSkeleton() {
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-5xl px-8 py-10">
+        <Button variant="ghost" className="mb-6 -ml-3 rounded-lg">
+          <ArrowLeft className="size-4" />
+          Back to Agents
+        </Button>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Autonomous Agent</p>
+
+            <h1 className="mt-1 text-3xl font-semibold font-skeleton animate-pulse">
+              Agent 0x1234
+            </h1>
+
+            <p className="mt-2 text-muted-foreground">
+              Manage this agent&apos;s vault, status, and policy.
+            </p>
+          </div>
+
+          <Badge
+            variant="outline"
+            className={"border-gray-500/30 bg-gray-500/10 text-gray-400"}
+          >
+            LOADING
+          </Badge>
+        </div>
+
+        {/* VAULT */}
+
+        <Card className="mt-10">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Vault className="size-6 text-muted-foreground" />
+              <div>
+                <CardTitle>Agent Vault</CardTitle>
+                <CardDescription>
+                  Mock balance controls for frontend testing.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Vault Balance</p>
+
+            <p className="mt-1 text-3xl font-skeleton animate-pulse">
+              0.00 SUI
+            </p>
+          </CardContent>
+          <CardFooter className="gap-3 border-t pt-5">
+            <Button disabled className="rounded-lg">
+              Withdraw
+            </Button>
+            <Button disabled variant="outline" className="rounded-lg">
+              Withdraw
+            </Button>
+          </CardFooter>
+        </Card>
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div className="grid gap-1">
+              <CardDescription>Agent Policy</CardDescription>
+              <CardTitle className="text-xl">Policy Configuration</CardTitle>
+            </div>
+            <Button disabled variant="outline" className="rounded-lg">
+              <Pencil className="size-4" />
+              Edit Policy
+            </Button>
+          </CardHeader>
+
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Risk Threshold</p>
+              <p className="mt-1 text-lg font-skeleton animate-pulse">00</p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">
+                Per-Tx Spending Limit
+              </p>
+
+              <p className="mt-1 text-lg font-skeleton animate-pulse">
+                0.00 SUI
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">
+                Period Spending Limit
+              </p>
+
+              <p className="mt-1 text-lg font-skeleton animate-pulse">
+                Not configured
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Period Length</p>
+
+              <p className="mt-1 text-lg font-skeleton animate-pulse">
+                Not configured
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Policy Expiry</p>
+
+              <p className="mt-1 text-lg font-skeleton animate-pulse">
+                Not configured
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">Allowed Actions</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="text-sm text-muted-foreground font-skeleton animate-pulse">
+                  Not configured
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="mt-6 border-destructive/30">
+          <CardHeader>
+            <CardTitle>Agent Status</CardTitle>
+
+            <CardDescription>
+              Deactivating an agent prevents it from performing new actions
+            </CardDescription>
+          </CardHeader>
+
+          <CardFooter>
+            <Button disabled variant="destructive" className={"rounded-lg"}>
+              <Power className="size-4" />
+              Deactivate Agent
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </main>
+  );
+}
 
 export default function AgentPage() {
   const params = useParams();
   const router = useRouter();
 
   const agentId = params.cap_id as string;
-  const foundAgent = loadMockAgents().find((item) => item.id === agentId);
 
-  const [agent, setAgent] = useState<Agent | null>(foundAgent || null);
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setIsLoading(true);
+        setLoadError(null);
+      }
+    });
+
+    getAgent(agentId)
+      .then((detail) => {
+        if (!cancelled) {
+          setAgent(detail ? agentFromDetail(detail) : null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId]);
+
+  // Deposit/Withdraw/Activate/Deactivate remain local-mock only (no real
+  // transaction) — persist() updates local state + localStorage for this
+  // session, matching the existing behavior before this page fetched real
+  // data. Since the page now always re-fetches real data on mount, these
+  // mock mutations won't persist visibly across a reload — a known,
+  // accepted limitation until these are wired to real transactions.
   function persist(updatedAgent: Agent) {
     saveMockAgent(updatedAgent);
     setAgent(updatedAgent);
@@ -134,16 +320,23 @@ export default function AgentPage() {
     });
   }
 
-  if (!agent) {
+  if (isLoading) {
+    return <AgentSkeleton />;
+  }
+
+  if (loadError || !agent) {
     return (
       <main className="min-h-screen bg-background text-foreground">
         <div className="mx-auto max-w-5xl px-8 py-10">
           <Card>
             <CardHeader>
-              <CardTitle>Agent not found</CardTitle>
+              <CardTitle>
+                {loadError ? "Failed to load agent" : "Agent not found"}
+              </CardTitle>
 
               <CardDescription>
-                The requested agent does not exist in the current mock data.
+                {loadError ??
+                  "No agent exists with this ID, or it hasn't been indexed yet."}
               </CardDescription>
             </CardHeader>
 
