@@ -220,7 +220,7 @@ export default function AuditPage() {
             Human Oversight
           </p>
 
-          <h1 className="mt-1 text-3xl font-semibold">
+          <h1 className="mt-1 text-3xl font-sem">
             Audit Trail
           </h1>
 
