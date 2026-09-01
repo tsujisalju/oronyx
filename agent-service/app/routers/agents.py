@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from app.models.agent import AgentSummary
-from app.services import sui_events
-from fastapi import APIRouter, Query
+from app.models.agent import AgentDetail, AgentSummary
+from app.services import sui_events, sui_objects
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 
@@ -24,6 +24,14 @@ async def list_agents(
         )
         for cap in created
     ]
+
+
+@router.get("/{cap_id}", response_model=AgentDetail)
+async def get_agent(cap_id: str):
+    detail = await sui_objects.get_agent_detail(cap_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return detail
 
 
 @router.post("/parse-policy")
