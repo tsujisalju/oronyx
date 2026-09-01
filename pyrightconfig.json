@@ -2,4 +2,5 @@
   "venvPath": "./agent-service",
   "venv": ".venv",
   "include": ["agent-service"],
+  "extraPaths": ["./agent-service"]
 }
