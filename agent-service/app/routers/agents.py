@@ -16,24 +16,6 @@ class ParsePolicyRequest(BaseModel):
     text: str
 
 
-@router.post("/parse-policy", response_model=AgentPolicy)
-def parse_policy(request: ParsePolicyRequest):
-    # Temporary parser.
-    # The LLM will replace this later.
-    return AgentPolicy(
-        spending_limit_per_tx=2_000_000_000,
-        spending_limit_period=10_000_000_000,
-        period_length_ms=3_600_000,
-        allowed_actions=[
-            ActionType.TRANSFER,
-            ActionType.MOCK_SWAP,
-        ],
-        allowed_targets=[],
-        risk_threshold=60,
-        expiry_ms=0,
-    )
-
-
 ACTION_MAP = {
     "transfer": ActionType.TRANSFER,
     "mock_swap": ActionType.MOCK_SWAP,
@@ -174,12 +156,6 @@ async def get_agent(cap_id: str):
     if detail is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     return detail
-
-
-@router.post("/parse-policy")
-def parse_policy():
-    # will take natural-language rules -> structured AgentCap fields
-    ...
 
 
 @router.post("/decide")
