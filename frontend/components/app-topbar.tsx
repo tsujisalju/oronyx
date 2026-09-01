@@ -15,7 +15,7 @@ const ConnectButton = dynamic(
 
 export default function AppTopbar() {
   return (
-    <header className="flex h-16 shrink-0 items-center justify-end border-b border-border/40 px-8">
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-end border-b border-border/40 backdrop-blur-lg px-8">
       <ConnectButton />
     </header>
   );

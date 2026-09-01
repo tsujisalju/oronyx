@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Bot,
-  LayoutDashboard,
-  ScrollText,
-  ShieldCheck,
-} from "lucide-react";
+import { Bot, LayoutDashboard, ScrollText, ShieldCheck } from "lucide-react";
 
 import OronyxLogomark from "@/components/icons/oronyx-logomark";
 import { cn } from "@/lib/utils";
@@ -45,12 +40,12 @@ export default function AppSidebar() {
   };
 
   return (
-    <aside className="hidden w-[220px] shrink-0 border-r border-border/60 bg-sidebar md:flex md:flex-col">
+    <aside className="hidden h-full w-60 shrink-0 border-r border-border/60 bg-sidebar md:flex md:flex-col">
       <div className="flex h-full flex-col">
         {/* Brand */}
         <div className="px-4 pb-5 pt-5">
           <Link
-             href="/"
+            href="/"
             className="inline-flex rounded-md transition-opacity hover:opacity-90"
           >
             <OronyxLogomark />
