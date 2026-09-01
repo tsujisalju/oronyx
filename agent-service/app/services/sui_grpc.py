@@ -10,6 +10,7 @@ pointed at our own configured endpoint.
 """
 
 from pathlib import Path
+from typing import Any
 
 from app.config import settings
 from pysui.sui.sui_common.config.confgroup import GroupProtocol, Profile, ProfileGroup
@@ -19,6 +20,7 @@ from pysui.sui.sui_common.config.confmodel import (
 )
 from pysui.sui.sui_common.config.pysui_config import PysuiConfiguration
 from pysui.sui.sui_grpc.pgrpc_clients import GrpcProtocolClient
+from pysui.sui.sui_grpc.suimsgs.google.protobuf import Value
 
 _CONFIG_ROOT = Path(".pysui")
 _CONFIG_FILE = _CONFIG_ROOT / "PysuiConfig.json"
@@ -67,3 +69,19 @@ def get_client() -> GrpcProtocolClient:
     if _client is None:
         _client = GrpcProtocolClient(pysui_config=_bootstrap_config())
     return _client
+
+
+def pb_value_to_dict(value: Value | None) -> dict[str, Any]:
+    """Normalize a google.protobuf.Value (used for both Event.json and
+    Object.json) to a plain dict.
+
+    Verified directly against the installed betterproto2 stubs: a struct
+    Value.to_dict() returns the native Python dict recursively (confirmed
+    by reading Value.to_dict()'s source in the installed package).
+    """
+    if value is None:
+        return {}
+    decoded = value.to_dict()
+    if not isinstance(decoded, dict):
+        raise TypeError(f"Expected .json to decode to a dict, got {type(decoded)!r}")
+    return decoded
