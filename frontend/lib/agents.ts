@@ -1,4 +1,4 @@
-import { AgentSummary } from "./agent-service";
+import { AgentDetail, AgentSummary } from "./agent-service";
 
 export type Agent = {
   id: string;
@@ -36,6 +36,63 @@ export function agentFromSummary(summary: AgentSummary): Agent {
     vaultBalance: "—",
     riskThreshold: -1,
     spendingLimit: "—",
+  };
+}
+
+export const MIST_PER_SUI = 1_000_000_000;
+
+export function formatMist(mist: number): string {
+  return `${(mist / MIST_PER_SUI).toFixed(2)} SUI`;
+}
+
+// Mirrors oronyx::capability's action-type codes (see move/sources/capability.move
+// and the ACTION_CODES map in agents/new/page.tsx, which only exposes SWAP/STAKE/
+// TRANSFER in its UI — CETUS_SWAP is included here since a cap can still carry it).
+export const ACTION_LABELS: Record<number, string> = {
+  0: "TRANSFER",
+  1: "SWAP",
+  2: "STAKE",
+  3: "CETUS_SWAP",
+};
+
+// Generic duration formatter — period_length_ms can be any value, not just
+// the fixed set of options agents/new/page.tsx's form offers, so this
+// computes whole days/hours directly rather than reverse-looking-up that
+// form's private DURATION_MS table.
+export function formatDuration(ms: number): string {
+  const hours = ms / 3_600_000;
+  if (hours >= 24 && hours % 24 === 0) {
+    const days = hours / 24;
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (Number.isInteger(hours)) {
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  return `${Math.round(ms / 60_000)} minutes`;
+}
+
+// expiry_ms is an absolute epoch timestamp, not a duration — must be
+// formatted as a date, not passed through formatDuration.
+export function formatExpiry(expiryMs: number): string {
+  return new Date(expiryMs).toLocaleString();
+}
+
+export function agentFromDetail(detail: AgentDetail): Agent {
+  return {
+    id: detail.cap_id,
+    capId: detail.cap_id,
+    vaultId: detail.vault_id,
+    name: `Agent ${detail.cap_id.slice(0, 6)}…${detail.cap_id.slice(-4)}`,
+    status: detail.active ? "ACTIVE" : "INACTIVE",
+    vaultBalance: formatMist(detail.vault_balance),
+    riskThreshold: detail.risk_threshold,
+    spendingLimit: formatMist(detail.spending_limit_per_tx),
+    allowedActions: detail.allowed_actions.map(
+      (code) => ACTION_LABELS[code] ?? `ACTION_${code}`,
+    ),
+    periodLimit: formatMist(detail.spending_limit_period),
+    periodLength: formatDuration(detail.period_length_ms),
+    expiry: formatExpiry(detail.expiry_ms),
   };
 }
 
