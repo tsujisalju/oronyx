@@ -1,0 +1,25 @@
+{
+  "version": "1.2.0",
+  "sui_binary": "",
+  "group_active": "oronyx_grpc",
+  "groups": [
+    {
+      "group_name": "oronyx_grpc",
+      "using_profile": "oronyx",
+      "using_address": "",
+      "alias_list": [],
+      "key_list": [],
+      "address_list": [],
+      "profiles": [
+        {
+          "profile_name": "oronyx",
+          "url": "fullnode.testnet.sui.io:443",
+          "faucet_url": null,
+          "faucet_status_url": null,
+          "network_type": null
+        }
+      ],
+      "protocol": 2
+    }
+  ]
+}

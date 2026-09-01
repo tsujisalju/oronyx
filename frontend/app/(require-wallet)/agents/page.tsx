@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpDown,
@@ -24,7 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Agent, loadMockAgents } from "@/lib/agents";
+import { Agent, agentFromSummary } from "@/lib/agents";
+import { listAgents } from "@/lib/agent-service";
 import {
   Empty,
   EmptyContent,
@@ -33,9 +34,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { useWalletConnection } from "@mysten/dapp-kit-react";
+import { useCurrentAccount, useWalletConnection } from "@mysten/dapp-kit-react";
 import { ConnectButton } from "../../dapp-kit-client-provider";
 import AgentCard from "./agent-card";
+import { Spinner } from "@/components/ui/spinner";
 
 type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
 
@@ -129,8 +131,46 @@ function AgentsList({
 
 export default function AgentsPage() {
   const connection = useWalletConnection();
+  const account = useCurrentAccount();
 
-  const [agents] = useState<Agent[]>(loadMockAgents);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!account) {
+      setAgents([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError(null);
+
+    listAgents(account.address)
+      .then((summaries) => {
+        if (!cancelled) {
+          setAgents(summaries.map(agentFromSummary));
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -266,6 +306,24 @@ export default function AgentsPage() {
         </div>
 
         {connection.status === "connected" ? (
+          isLoading ? (
+            <div className="mt-10 flex flex-col items-center gap-3 text-muted-foreground">
+              <Spinner />
+              <p className="text-sm">Loading agents…</p>
+            </div>
+          ) : loadError ? (
+            <Empty className="mt-10 border border-dashed">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BotOff />
+                </EmptyMedia>
+
+                <EmptyTitle>Failed to load agents</EmptyTitle>
+
+                <EmptyDescription>{loadError}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
           <>
             {agents.length > 0 && (
               <>
@@ -488,6 +546,7 @@ export default function AgentsPage() {
               onClearFilters={clearFilters}
             />
           </>
+          )
         ) : (
           <Empty className="mt-10 border border-dashed">
             <EmptyHeader>
