@@ -6,35 +6,19 @@ uses pysui's gRPC ListEvents instead, matching the gRPC convention already
 used on the TypeScript side (executor/, frontend/).
 """
 
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from app.config import settings
 from app.models.sui_events import CapCreatedPayload, CapDeactivatedPayload
-from app.services.sui_grpc import get_client
+from app.services.sui_grpc import get_client, pb_value_to_dict
 from pydantic import BaseModel
 from pysui.sui.sui_grpc.pgrpc_filters import Literal, build_event_filter
 from pysui.sui.sui_grpc.pgrpc_requests import ListEvents
-from pysui.sui.sui_grpc.suimsgs.google.protobuf import Value
 
 CAP_CREATED_EVENT_TYPE = f"{settings.oronyx_package_id}::capability::CapCreated"
 CAP_DEACTIVATED_EVENT_TYPE = f"{settings.oronyx_package_id}::capability::CapDeactivated"
 
 T = TypeVar("T", bound=BaseModel)
-
-
-def _event_json_to_dict(value: Value | None) -> dict[str, Any]:
-    """Normalize an Event.json (a google.protobuf.Value) to a plain dict.
-
-    Verified directly against the installed betterproto2 stubs: a struct
-    Value.to_dict() returns the native Python dict recursively (confirmed
-    by reading Value.to_dict()'s source in the installed package).
-    """
-    if value is None:
-        return {}
-    decoded = value.to_dict()
-    if not isinstance(decoded, dict):
-        raise TypeError(f"Expected event.json to decode to a dict, got {type(decoded)!r}")
-    return decoded
 
 
 async def _query_events_by_type(event_type: str, payload_model: type[T]) -> list[T]:
@@ -58,7 +42,7 @@ async def _query_events_by_type(event_type: str, payload_model: type[T]) -> list
         if frame.event is None:
             continue
         payloads.append(
-            payload_model.model_validate(_event_json_to_dict(frame.event.json))
+            payload_model.model_validate(pb_value_to_dict(frame.event.json))
         )
 
     return payloads

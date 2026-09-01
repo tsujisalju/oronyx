@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Roboto, Stack_Sans_Headline } from "next/font/google";
+import { Flow_Circular, Roboto, Stack_Sans_Headline } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import Header from "@/components/header";
@@ -9,6 +9,13 @@ import { Toaster } from "@/components/ui/sonner";
 const stackSansHeadline = Stack_Sans_Headline({
   subsets: ["latin"],
   variable: "--font-stack-sans-headline",
+  adjustFontFallback: false,
+});
+
+const flowCircular = Flow_Circular({
+  subsets: ["latin"],
+  variable: "--font-flow-circular",
+  weight: "400",
   adjustFontFallback: false,
 });
 
@@ -29,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         "font-sans",
         roboto.variable,
         stackSansHeadline.variable,
+        flowCircular.variable,
         "dark",
       )}
     >
