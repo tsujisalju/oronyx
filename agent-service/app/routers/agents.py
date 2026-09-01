@@ -1,9 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
-
 from app.models.agent import AgentMetadataCreate, AgentSummary
 from app.services import agent_metadata, sui_events
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 

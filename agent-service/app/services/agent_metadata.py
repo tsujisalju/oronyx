@@ -13,7 +13,7 @@ def _connect():
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
 
-    connection.execute(
+    _ = connection.execute(
         """
         CREATE TABLE IF NOT EXISTS agent_metadata (
             cap_id TEXT PRIMARY KEY,
@@ -38,7 +38,7 @@ def save_agent_metadata(
     connection = _connect()
 
     try:
-        connection.execute(
+        _ = connection.execute(
             """
             INSERT INTO agent_metadata (cap_id, owner, name)
             VALUES (?, ?, ?)
