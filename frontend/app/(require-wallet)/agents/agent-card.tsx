@@ -50,7 +50,9 @@ export default function AgentCard({ agent }: { agent: Agent }) {
         <div className="mt-6 grid grid-cols-2 gap-4 border-t pt-5">
           <div>
             <p className="text-sm text-muted-foreground">Risk Threshold</p>
-            <p className="mt-1 font-medium">{agent.riskThreshold}</p>
+            <p className="mt-1 font-medium">
+              {agent.riskThreshold >= 0 ? agent.riskThreshold : "—"}
+            </p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Per-Tx Limit</p>

@@ -1,3 +1,5 @@
+import { AgentSummary } from "./agent-service";
+
 export type Agent = {
   id: string;
   name: string;
@@ -18,6 +20,24 @@ export type Agent = {
   capId?: string;
   vaultId?: string;
 };
+
+// GET /agents (agent-service) only returns identity/active-status today —
+// no name/riskThreshold/spendingLimit/vaultBalance yet. These placeholders
+// are interim until a dedicated agent-details endpoint fills them in;
+// riskThreshold's -1 sentinel signals "not yet available" to AgentCard
+// (a real threshold is always 0-100).
+export function agentFromSummary(summary: AgentSummary): Agent {
+  return {
+    id: summary.cap_id,
+    capId: summary.cap_id,
+    vaultId: summary.vault_id,
+    name: `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
+    status: summary.active ? "ACTIVE" : "INACTIVE",
+    vaultBalance: "—",
+    riskThreshold: -1,
+    spendingLimit: "—",
+  };
+}
 
 export const mockAgents: Agent[] = [
   {
