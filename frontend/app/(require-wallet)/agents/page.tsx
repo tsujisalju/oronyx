@@ -348,7 +348,7 @@ export default function AgentsPage() {
             <h1 className="text-3xl font-display">Agents</h1>
 
             <p className="mt-2 text-muted-foreground">
-              Manage autonomous agents, policies, and vaults.
+              Manage the autonomous agents powering your assets.
             </p>
           </div>
 
