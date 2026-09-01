@@ -66,6 +66,7 @@ export interface AgentDetail {
   risk_threshold: number;
   expiry_ms: number;
   vault_balance: number;
+  name: string | null;
 }
 
 export async function getAgent(capId: string): Promise<AgentDetail | null> {

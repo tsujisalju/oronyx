@@ -179,6 +179,7 @@ async def get_agent(cap_id: str):
     detail = await sui_objects.get_agent_detail(cap_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Agent not found")
+    detail.name = agent_metadata.get_agent_name(cap_id)
     return detail
 
 

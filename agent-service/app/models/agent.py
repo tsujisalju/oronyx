@@ -33,3 +33,4 @@ class AgentDetail(BaseModel):
     risk_threshold: int
     expiry_ms: int
     vault_balance: int
+    name: str | None = None
