@@ -26,6 +26,7 @@ export type Agent = {
   // `cap_id`. Optional for the still-present mock seed agents.
   capId?: string;
   vaultId?: string;
+  owner?: string;
 
   // True when `name` came from saved agent-service metadata rather than
   // being synthesized from capId — controls whether AgentCard shows the
@@ -43,6 +44,7 @@ export function agentFromSummary(summary: AgentSummary): Agent {
     id: summary.cap_id,
     capId: summary.cap_id,
     vaultId: summary.vault_id,
+    owner: summary.owner,
     name:
   summary.name ??
   `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
@@ -137,6 +139,7 @@ export function agentFromDetail(detail: AgentDetail): Agent {
     id: detail.cap_id,
     capId: detail.cap_id,
     vaultId: detail.vault_id,
+    owner: detail.owner,
     name:
       detail.name ??
       `Agent ${detail.cap_id.slice(0, 6)}…${detail.cap_id.slice(-4)}`,

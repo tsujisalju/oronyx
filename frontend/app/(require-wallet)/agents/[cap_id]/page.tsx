@@ -43,6 +43,7 @@ import {
 
 import { Agent, agentFromDetail, saveMockAgent } from "@/lib/agents";
 import { getAgent } from "@/lib/agent-service";
+import EditableAgentName from "@/components/editable-agent-name";
 
 function AgentSkeleton() {
   return (
@@ -386,7 +387,16 @@ export default function AgentPage() {
           <div>
             <p className="text-sm text-muted-foreground">Autonomous Agent</p>
 
-            <h1 className="mt-1 text-3xl font-semibold">{agent.name}</h1>
+            <h1 className="mt-1 text-3xl font-semibold">
+              <EditableAgentName
+                name={agent.name}
+                capId={agent.capId}
+                owner={agent.owner}
+                onSaved={(newName) =>
+                  setAgent({ ...agent, name: newName, hasName: true })
+                }
+              />
+            </h1>
 
             <p className="mt-2 text-muted-foreground">
               Manage this agent&apos;s vault, status, and policy.
