@@ -53,16 +53,12 @@ import {
 
 import { Slider } from "@/components/ui/slider";
 
-import {
-  Agent,
-  agentFromDetail,
-  MIST_PER_SUI,
-  saveMockAgent,
-} from "@/lib/agents";
+import { Agent, agentFromDetail, MIST_PER_SUI } from "@/lib/agents";
 import { getAgent } from "@/lib/agent-service";
 import EditableAgentName from "@/components/editable-agent-name";
 import { notifyBalanceChanged, useSuiBalance } from "@/lib/use-sui-balance";
 import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
+import { Spinner } from "@/components/ui/spinner";
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
 
@@ -241,6 +237,7 @@ export default function AgentPage() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
 
   const { balanceMist: walletBalanceMist } = useSuiBalance(account?.address);
 
@@ -284,16 +281,6 @@ export default function AgentPage() {
       cancelled = true;
     };
   }, [agentId]);
-
-  // Activate/Deactivate remain local-mock only (no real transaction) —
-  // persist() updates local state + localStorage for this session. Since the
-  // page re-fetches real data on mount, these mock mutations won't persist
-  // visibly across a reload — a known, accepted limitation until these are
-  // wired to real transactions.
-  function persist(updatedAgent: Agent) {
-    saveMockAgent(updatedAgent);
-    setAgent(updatedAgent);
-  }
 
   const isOwner = account?.address === agent?.owner;
 
@@ -398,30 +385,42 @@ export default function AgentPage() {
     }
   }
 
-  function handleDeactivate() {
-    if (!agent) return;
+  async function handleDeactivate() {
+    if (!agent?.capId || !account) return;
 
-    persist({
-      ...agent,
-      status: "INACTIVE",
-    });
+    setIsDeactivating(true);
 
-    toast.success("Agent deactivated", {
-      description: `${agent.name} can no longer perform autonomous actions.`,
-    });
-  }
+    try {
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::capability::deactivate`,
+        arguments: [tx.object(agent.capId)],
+      });
 
-  function handleActivate() {
-    if (!agent) return;
+      const result = await signAndExecuteSponsoredTransaction({
+        transaction: tx,
+        sender: account.address,
+        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::deactivate`],
+        allowedAddresses: [account.address],
+      });
 
-    persist({
-      ...agent,
-      status: "ACTIVE",
-    });
+      if (result.$kind !== "Transaction") {
+        throw new Error("Sponsored transaction failed");
+      }
 
-    toast.success("Agent activated", {
-      description: `${agent.name} can perform autonomous actions again.`,
-    });
+      await loadAgent();
+
+      toast.success("Agent deactivated", {
+        description: `${agent.name} can no longer perform autonomous actions. This cannot be undone.`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to deactivate agent", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsDeactivating(false);
+    }
   }
 
   if (isLoading) {
@@ -660,7 +659,14 @@ export default function AgentPage() {
                       isDepositing
                     }
                   >
-                    {isDepositing ? "Depositing..." : "Deposit"}
+                    {isDepositing ? (
+                      <>
+                        <Spinner data-icon="inline-start" />
+                        Depositing...
+                      </>
+                    ) : (
+                      "Deposit"
+                    )}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -771,7 +777,14 @@ export default function AgentPage() {
                       isWithdrawing
                     }
                   >
-                    {isWithdrawing ? "Withdrawing..." : "Withdraw"}
+                    {isWithdrawing ? (
+                      <>
+                        <Spinner data-icon="inline-start" />
+                        Withdrawing...
+                      </>
+                    ) : (
+                      "Withdraw"
+                    )}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -897,17 +910,21 @@ export default function AgentPage() {
 
             <CardDescription>
               {agent.status === "ACTIVE"
-                ? "Deactivating an agent prevents it from performing new actions."
-                : "This agent is inactive and cannot perform autonomous actions."}
+                ? "Deactivating an agent prevents it from performing new actions. This cannot be undone — there is no way to reactivate an agent once deactivated."
+                : "This agent has been permanently deactivated and cannot be reactivated."}
             </CardDescription>
           </CardHeader>
 
-          <CardFooter>
-            {agent.status === "ACTIVE" ? (
-              <AlertDialog key="deactivate-dialog">
+          {agent.status === "ACTIVE" && (
+            <CardFooter>
+              <AlertDialog>
                 <AlertDialogTrigger
                   render={
-                    <Button variant="destructive" className="rounded-lg" />
+                    <Button
+                      variant="destructive"
+                      className="rounded-lg"
+                      disabled={!isOwner}
+                    />
                   }
                 >
                   <Power className="size-4" />
@@ -921,9 +938,12 @@ export default function AgentPage() {
                     </AlertDialogTitle>
 
                     <AlertDialogDescription>
-                      This agent will no longer be able to perform new actions.
-                      Its current policy and vault information will be
-                      preserved.
+                      This is permanent — there is no way to reactivate an
+                      agent once deactivated. Its current policy and vault
+                      information will be preserved, but it will never be able
+                      to perform actions again. If you want this agent to keep
+                      running longer, use Edit Policy to extend its expiry
+                      first instead.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
 
@@ -932,43 +952,19 @@ export default function AgentPage() {
 
                     <AlertDialogAction
                       onClick={handleDeactivate}
+                      disabled={isDeactivating}
                       className="bg-destructive text-white hover:bg-destructive/90"
                     >
                       <Power className="size-4" />
-                      Deactivate Agent
+                      {isDeactivating
+                        ? "Deactivating..."
+                        : "Deactivate Agent"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            ) : (
-              <AlertDialog key="activate-dialog">
-                <AlertDialogTrigger render={<Button className="rounded-lg" />}>
-                  <Power className="size-4" />
-                  Activate Agent
-                </AlertDialogTrigger>
-
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Activate {agent.name}?</AlertDialogTitle>
-
-                    <AlertDialogDescription>
-                      This agent will be allowed to perform autonomous actions
-                      again according to its current policy.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-
-                    <AlertDialogAction onClick={handleActivate}>
-                      <Power className="size-4" />
-                      Activate Agent
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </CardFooter>
+            </CardFooter>
+          )}
         </Card>
       </div>
     </main>
