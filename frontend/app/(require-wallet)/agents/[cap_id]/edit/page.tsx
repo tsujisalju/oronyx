@@ -57,6 +57,190 @@ function closestDurationOption(options: string[], ms: number): string {
   );
 }
 
+function EditSkeleton() {
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-3xl px-8 py-10">
+        <Button variant="ghost" className="mb-6 -ml-3 rounded-lg">
+          <ArrowLeft className="size-4" />
+          Back to Agent
+        </Button>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Agent Policy</p>
+            <h1 className="mt-1 text-3xl font-semibold">Edit Policy</h1>
+            <p className="mt-2 text-muted-foreground">
+              Update the limits and permissions that control{" "}
+              <span className="font-skeleton">Agent 0x1234</span>
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={"border-gray-500/30 bg-gray-500/10 text-gray-400"}
+          >
+            LOADING
+          </Badge>
+        </div>
+        <Card className="mt-10">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="size-5 text-muted-foreground" />
+              <div>
+                <CardTitle>Policy Configuration</CardTitle>
+                <CardDescription>
+                  Changes are submitted directly to the AgentCap on-chain, in a
+                  single sponsored transaction.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-2">
+              <Label htmlFor="spending-limit">Per-Tx Spending Limit</Label>
+              <div className="relative">
+                <Input
+                  id="spending-limit"
+                  type="number"
+                  className="pr-14"
+                  disabled
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  SUI
+                </span>
+              </div>
+            </div>
+
+            {/* PERIOD LIMIT */}
+
+            <div className="grid gap-2">
+              <Label htmlFor="period-limit">Period Spending Limit</Label>
+
+              <div className="relative">
+                <Input
+                  id="period-limit"
+                  type="number"
+                  className="pr-14"
+                  disabled
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  SUI
+                </span>
+              </div>
+            </div>
+
+            {/* PERIOD LENGTH */}
+
+            <div className="grid gap-2">
+              <Label>Period Length</Label>
+              <Select disabled>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {PERIOD_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The spending limit resets after this period.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="risk-threshold">Risk Threshold</Label>
+              <Input id="risk-threshold" type="number" disabled />
+
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Actions above this score may be flagged for review.
+                </p>
+
+                <span className="text-sm font-medium">0 / 100</span>
+              </div>
+            </div>
+
+            {/* EXPIRY */}
+
+            <div className="grid gap-2">
+              <Label>Policy Expiry</Label>
+              <Select disabled>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select expiry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {EXPIRY_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Resets to now + the selected duration when saved.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label>Allowed Actions</Label>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="opacity-60">
+                  LOADING
+                </Badge>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Fixed at creation — the contract has no way to change allowed
+                actions after the agent is created.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label>Allowed Targets</Label>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={"outline"} className="gap-1">
+                  LOADING
+                </Badge>
+              </div>
+              <div className="flex gap-2">
+                <Input placeholder="0x..." disabled />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-lg"
+                  disabled
+                >
+                  <Plus className="size-4" />
+                  Add
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Addresses marked with a lock are required by an enabled action
+                and can&apos;t be removed here.
+              </p>
+            </div>
+          </CardContent>
+
+          <CardFooter className="justify-end gap-3 border-t pt-5">
+            <Button variant="outline" className="rounded-lg" disabled>
+              Cancel
+            </Button>
+
+            <Button className="rounded-lg" disabled>
+              <Save className="size-4" />
+              Save Policy
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </main>
+  );
+}
+
 export default function EditAgentPolicyPage() {
   const params = useParams();
   const router = useRouter();
@@ -121,13 +305,7 @@ export default function EditAgentPolicyPage() {
   }, [capId]);
 
   if (isLoading) {
-    return (
-      <main className="min-h-screen bg-background text-foreground">
-        <div className="mx-auto max-w-3xl px-8 py-10">
-          <p className="text-muted-foreground">Loading agent...</p>
-        </div>
-      </main>
-    );
+    return <EditSkeleton />;
   }
 
   if (notFound || !detail) {
@@ -178,9 +356,7 @@ export default function EditAgentPolicyPage() {
   const nextSpendingLimitPerTx = Math.round(
     numericSpendingLimit * MIST_PER_SUI,
   );
-  const nextSpendingLimitPeriod = Math.round(
-    numericPeriodLimit * MIST_PER_SUI,
-  );
+  const nextSpendingLimitPeriod = Math.round(numericPeriodLimit * MIST_PER_SUI);
   const nextPeriodLengthMs = DURATION_MS[periodLength];
   const nextRiskThreshold = Math.round(numericRisk);
 
@@ -366,8 +542,8 @@ export default function EditAgentPolicyPage() {
 
         {!isOwner && (
           <p className="mt-4 text-sm text-destructive">
-            Only the agent&apos;s owner can edit its policy. Connect the
-            owning wallet to make changes.
+            Only the agent&apos;s owner can edit its policy. Connect the owning
+            wallet to make changes.
           </p>
         )}
 
@@ -382,8 +558,8 @@ export default function EditAgentPolicyPage() {
                 <CardTitle>Policy Configuration</CardTitle>
 
                 <CardDescription>
-                  Changes are submitted directly to the AgentCap on-chain, in
-                  a single sponsored transaction.
+                  Changes are submitted directly to the AgentCap on-chain, in a
+                  single sponsored transaction.
                 </CardDescription>
               </div>
             </div>
@@ -626,8 +802,8 @@ export default function EditAgentPolicyPage() {
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Addresses marked with a lock are required by an enabled
-                action and can&apos;t be removed here.
+                Addresses marked with a lock are required by an enabled action
+                and can&apos;t be removed here.
               </p>
             </div>
           </CardContent>
