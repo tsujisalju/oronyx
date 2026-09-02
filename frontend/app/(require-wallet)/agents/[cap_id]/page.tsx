@@ -61,7 +61,7 @@ import {
 } from "@/lib/agents";
 import { getAgent } from "@/lib/agent-service";
 import EditableAgentName from "@/components/editable-agent-name";
-import { useSuiBalance } from "@/lib/use-sui-balance";
+import { notifyBalanceChanged, useSuiBalance } from "@/lib/use-sui-balance";
 import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
@@ -241,11 +241,8 @@ export default function AgentPage() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [depositPercent, setDepositPercent] = useState(0);
-  const [withdrawPercent, setWithdrawPercent] = useState(0);
 
-  const { balanceMist: walletBalanceMist, refetch: refetchWalletBalance } =
-    useSuiBalance(account?.address);
+  const { balanceMist: walletBalanceMist } = useSuiBalance(account?.address);
 
   const loadAgent = async () => {
     try {
@@ -333,14 +330,13 @@ export default function AgentPage() {
       }
 
       await loadAgent();
-      refetchWalletBalance();
+      notifyBalanceChanged();
 
       toast.success("Deposit successful", {
         description: `${amount.toFixed(2)} SUI was added to ${agent.name}'s vault.`,
       });
 
       setDepositAmount("");
-      setDepositPercent(0);
       setDepositOpen(false);
     } catch (error) {
       console.error(error);
@@ -384,14 +380,13 @@ export default function AgentPage() {
       }
 
       await loadAgent();
-      refetchWalletBalance();
+      notifyBalanceChanged();
 
       toast.success("Withdrawal successful", {
         description: `${amount.toFixed(2)} SUI was withdrawn from ${agent.name}'s vault.`,
       });
 
       setWithdrawAmount("");
-      setWithdrawPercent(0);
       setWithdrawOpen(false);
     } catch (error) {
       console.error(error);
@@ -466,8 +461,18 @@ export default function AgentPage() {
   const vaultBalanceMist = agent.vaultBalanceMist ?? 0;
   const numericBalance = vaultBalanceMist / MIST_PER_SUI;
 
+  // Derived from the amount input (rather than tracked as separate state) so
+  // the slider always reflects manual edits to the amount field too.
+  function percentOf(amountText: string, basisMist: number): number {
+    if (basisMist <= 0) return 0;
+    const amountMist = (Number.parseFloat(amountText) || 0) * MIST_PER_SUI;
+    return Math.min(100, Math.max(0, (amountMist / basisMist) * 100));
+  }
+
+  const depositPercent = percentOf(depositAmount, walletBalanceMist ?? 0);
+  const withdrawPercent = percentOf(withdrawAmount, vaultBalanceMist);
+
   function applyDepositPercent(percent: number) {
-    setDepositPercent(percent);
     if (walletBalanceMist == null) return;
     setDepositAmount(
       ((walletBalanceMist * percent) / 100 / MIST_PER_SUI).toFixed(2),
@@ -475,7 +480,6 @@ export default function AgentPage() {
   }
 
   function applyWithdrawPercent(percent: number) {
-    setWithdrawPercent(percent);
     setWithdrawAmount(
       ((vaultBalanceMist * percent) / 100 / MIST_PER_SUI).toFixed(2),
     );
@@ -608,7 +612,7 @@ export default function AgentPage() {
                       }}
                       min={0}
                       max={100}
-                      step={5}
+                      step={1}
                     />
 
                     <div className="flex justify-between text-xs text-muted-foreground">
@@ -643,7 +647,6 @@ export default function AgentPage() {
                     onClick={() => {
                       setDepositOpen(false);
                       setDepositAmount("");
-                      setDepositPercent(0);
                     }}
                   >
                     Cancel
@@ -720,7 +723,7 @@ export default function AgentPage() {
                       }}
                       min={0}
                       max={100}
-                      step={25}
+                      step={1}
                     />
 
                     <div className="flex justify-between text-xs text-muted-foreground">
@@ -754,7 +757,6 @@ export default function AgentPage() {
                     onClick={() => {
                       setWithdrawOpen(false);
                       setWithdrawAmount("");
-                      setWithdrawPercent(0);
                     }}
                   >
                     Cancel
