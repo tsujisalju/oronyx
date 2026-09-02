@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Lock, Plus, Save, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { Transaction } from "@mysten/sui/transactions";
+import { isValidSuiAddress } from "@mysten/sui/utils";
+
+import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,38 +22,115 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-import { Agent, loadMockAgents, saveMockAgent } from "@/lib/agents";
+import { AgentDetail, getAgent } from "@/lib/agent-service";
+import {
+  ACTION_LABELS,
+  agentFromDetail,
+  DURATION_MS,
+  EXPIRY_OPTIONS,
+  MIST_PER_SUI,
+  PERIOD_OPTIONS,
+} from "@/lib/agents";
+
+const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
+
+// Finds the PERIOD_OPTIONS/EXPIRY_OPTIONS entry whose DURATION_MS value
+// matches an on-chain ms value, falling back to the closest option so a cap
+// created with a non-standard duration still seeds a valid Select value.
+function closestDurationOption(options: string[], ms: number): string {
+  const exact = options.find((option) => DURATION_MS[option] === ms);
+  if (exact) return exact;
+
+  return options.reduce((closest, option) =>
+    Math.abs(DURATION_MS[option] - ms) < Math.abs(DURATION_MS[closest] - ms)
+      ? option
+      : closest,
+  );
+}
 
 export default function EditAgentPolicyPage() {
   const params = useParams();
   const router = useRouter();
+  const account = useCurrentAccount();
 
-  const agentId = params.cap_id as string;
-  const foundAgent = loadMockAgents().find((item) => item.id === agentId);
+  const capId = params.cap_id as string;
 
-  const [agent, setAgent] = useState<Agent | null>(foundAgent ?? null);
+  const [detail, setDetail] = useState<AgentDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  const [spendingLimit, setSpendingLimit] = useState(
-    foundAgent?.spendingLimit.replace(" SUI", "") ?? "",
-  );
-  const [periodLimit, setPeriodLimit] = useState(
-    foundAgent?.spendingLimit.replace(" SUI", "") ?? "",
-  );
-  const [periodLength, setPeriodLength] = useState(
-    foundAgent?.periodLength ?? "",
-  );
-  const [riskThreshold, setRiskThreshold] = useState(
-    String(foundAgent?.riskThreshold),
-  );
-  const [expiry, setExpiry] = useState(foundAgent?.expiry ?? "");
-  const [allowedActions, setAllowedActions] = useState(
-    foundAgent?.allowedActions?.join(", ") ?? "",
-  );
+  const [spendingLimit, setSpendingLimit] = useState("");
+  const [periodLimit, setPeriodLimit] = useState("");
+  const [periodLength, setPeriodLength] = useState(PERIOD_OPTIONS[3]);
+  const [riskThreshold, setRiskThreshold] = useState("");
+  const [expiry, setExpiry] = useState(EXPIRY_OPTIONS[2]);
+  const [targets, setTargets] = useState<string[]>([]);
+  const [newTarget, setNewTarget] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!agent) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setIsLoading(true);
+      try {
+        const result = await getAgent(capId);
+        if (cancelled) return;
+
+        if (!result) {
+          setNotFound(true);
+          return;
+        }
+
+        setDetail(result);
+        setSpendingLimit(String(result.spending_limit_per_tx / MIST_PER_SUI));
+        setPeriodLimit(String(result.spending_limit_period / MIST_PER_SUI));
+        setPeriodLength(
+          closestDurationOption(PERIOD_OPTIONS, result.period_length_ms),
+        );
+        setRiskThreshold(String(result.risk_threshold));
+        setExpiry(
+          closestDurationOption(
+            EXPIRY_OPTIONS,
+            Math.max(result.expiry_ms - Date.now(), 0),
+          ),
+        );
+        setTargets(result.allowed_targets);
+      } catch (error) {
+        console.error("Failed to load agent:", error);
+        if (!cancelled) setNotFound(true);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [capId]);
+
+  if (isLoading) {
+    return (
+      <main className="min-h-screen bg-background text-foreground">
+        <div className="mx-auto max-w-3xl px-8 py-10">
+          <p className="text-muted-foreground">Loading agent...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (notFound || !detail) {
     return (
       <main className="min-h-screen bg-background text-foreground">
         <div className="mx-auto max-w-3xl px-8 py-10">
@@ -72,6 +154,9 @@ export default function EditAgentPolicyPage() {
     );
   }
 
+  const isOwner = account?.address === detail.owner;
+  const agent = agentFromDetail(detail);
+
   const numericRisk = Number(riskThreshold);
   const numericSpendingLimit = Number(spendingLimit);
   const numericPeriodLimit = Number(periodLimit);
@@ -86,52 +171,158 @@ export default function EditAgentPolicyPage() {
     !Number.isFinite(numericPeriodLimit) || numericPeriodLimit <= 0;
 
   const formInvalid =
-    riskInvalid ||
-    spendingInvalid ||
-    periodLimitInvalid ||
-    !periodLength.trim() ||
-    !expiry.trim() ||
-    !allowedActions.trim();
+    riskInvalid || spendingInvalid || periodLimitInvalid || !isOwner;
+
+  // Raw on-chain-unit values the form currently represents, for diffing
+  // against `detail`'s original values.
+  const nextSpendingLimitPerTx = Math.round(
+    numericSpendingLimit * MIST_PER_SUI,
+  );
+  const nextSpendingLimitPeriod = Math.round(
+    numericPeriodLimit * MIST_PER_SUI,
+  );
+  const nextPeriodLengthMs = DURATION_MS[periodLength];
+  const nextRiskThreshold = Math.round(numericRisk);
+
+  function handleAddTarget() {
+    if (!isOwner) return;
+
+    const candidate = newTarget.trim();
+    if (!isValidSuiAddress(candidate)) {
+      toast.error("Invalid address", {
+        description: "Enter a valid Sui address (0x...).",
+      });
+      return;
+    }
+
+    const normalized = candidate.toLowerCase();
+    if (targets.some((target) => target.toLowerCase() === normalized)) {
+      toast.error("Address already allowed");
+      return;
+    }
+
+    setTargets((current) => [...current, candidate]);
+    setNewTarget("");
+  }
+
+  function handleRemoveTarget(target: string) {
+    if (!isOwner) return;
+    setTargets((current) => current.filter((item) => item !== target));
+  }
 
   async function handleSavePolicy() {
-    if (!agent || formInvalid) return;
+    if (!detail || !account || formInvalid) return;
+
+    const nextExpiryMs = Date.now() + DURATION_MS[expiry];
+    const tx = new Transaction();
+    const allowedMoveCallTargets = new Set<string>();
+
+    if (nextSpendingLimitPerTx !== detail.spending_limit_per_tx) {
+      const target = `${PACKAGE_ID}::capability::update_spending_limit_per_tx`;
+      tx.moveCall({
+        target,
+        arguments: [tx.object(capId), tx.pure.u64(nextSpendingLimitPerTx)],
+      });
+      allowedMoveCallTargets.add(target);
+    }
+
+    if (nextSpendingLimitPeriod !== detail.spending_limit_period) {
+      const target = `${PACKAGE_ID}::capability::update_spending_limit_period`;
+      tx.moveCall({
+        target,
+        arguments: [tx.object(capId), tx.pure.u64(nextSpendingLimitPeriod)],
+      });
+      allowedMoveCallTargets.add(target);
+    }
+
+    if (nextPeriodLengthMs !== detail.period_length_ms) {
+      const target = `${PACKAGE_ID}::capability::update_period_length_ms`;
+      tx.moveCall({
+        target,
+        arguments: [tx.object(capId), tx.pure.u64(nextPeriodLengthMs)],
+      });
+      allowedMoveCallTargets.add(target);
+    }
+
+    if (nextRiskThreshold !== detail.risk_threshold) {
+      const target = `${PACKAGE_ID}::capability::update_risk_threshold`;
+      tx.moveCall({
+        target,
+        arguments: [tx.object(capId), tx.pure.u8(nextRiskThreshold)],
+      });
+      allowedMoveCallTargets.add(target);
+    }
+
+    if (nextExpiryMs !== detail.expiry_ms) {
+      const target = `${PACKAGE_ID}::capability::update_expiry_ms`;
+      tx.moveCall({
+        target,
+        arguments: [tx.object(capId), tx.pure.u64(nextExpiryMs)],
+      });
+      allowedMoveCallTargets.add(target);
+    }
+
+    const originalTargets = new Set(
+      detail.allowed_targets.map((address) => address.toLowerCase()),
+    );
+    const currentTargets = new Set(
+      targets.map((address) => address.toLowerCase()),
+    );
+
+    for (const address of currentTargets) {
+      if (!originalTargets.has(address)) {
+        const target = `${PACKAGE_ID}::capability::add_allowed_target`;
+        tx.moveCall({
+          target,
+          arguments: [tx.object(capId), tx.pure.address(address)],
+        });
+        allowedMoveCallTargets.add(target);
+      }
+    }
+
+    for (const address of originalTargets) {
+      if (!currentTargets.has(address)) {
+        const target = `${PACKAGE_ID}::capability::remove_allowed_target`;
+        tx.moveCall({
+          target,
+          arguments: [tx.object(capId), tx.pure.address(address)],
+        });
+        allowedMoveCallTargets.add(target);
+      }
+    }
+
+    if (allowedMoveCallTargets.size === 0) {
+      toast.info("No changes to save");
+      return;
+    }
 
     setIsSaving(true);
 
-    // Temporary delay to simulate a real transaction/API call.
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    try {
+      const result = await signAndExecuteSponsoredTransaction({
+        transaction: tx,
+        sender: account.address,
+        allowedMoveCallTargets: [...allowedMoveCallTargets],
+        allowedAddresses: [account.address],
+      });
 
-    const actions = allowedActions
-      .split(",")
-      .map((action) => action.trim().toUpperCase())
-      .filter(Boolean);
+      if (result.$kind !== "Transaction") {
+        throw new Error("Sponsored transaction failed");
+      }
 
-    const updatedAgent: Agent = {
-      ...agent,
+      toast.success("Policy updated", {
+        description: `${agent.name}'s policy configuration has been saved.`,
+      });
 
-      spendingLimit: `${numericSpendingLimit.toFixed(2)} SUI`,
-
-      periodLimit: `${numericPeriodLimit.toFixed(2)} SUI`,
-
-      periodLength: periodLength.trim(),
-
-      riskThreshold: numericRisk,
-
-      expiry: expiry.trim(),
-
-      allowedActions: actions,
-    };
-
-    saveMockAgent(updatedAgent);
-    setAgent(updatedAgent);
-
-    setIsSaving(false);
-
-    toast.success("Policy updated", {
-      description: `${agent.name}'s policy configuration has been saved.`,
-    });
-
-    router.push(`/agents/${agent.id}`);
+      router.push(`/agents/${capId}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update policy", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -142,7 +333,7 @@ export default function EditAgentPolicyPage() {
         <Button
           variant="ghost"
           className="mb-6 -ml-3 rounded-lg"
-          onClick={() => router.push(`/agents/${agent.id}`)}
+          onClick={() => router.push(`/agents/${capId}`)}
         >
           <ArrowLeft className="size-4" />
           Back to Agent
@@ -173,6 +364,13 @@ export default function EditAgentPolicyPage() {
           </Badge>
         </div>
 
+        {!isOwner && (
+          <p className="mt-4 text-sm text-destructive">
+            Only the agent&apos;s owner can edit its policy. Connect the
+            owning wallet to make changes.
+          </p>
+        )}
+
         {/* POLICY FORM */}
 
         <Card className="mt-10">
@@ -184,8 +382,8 @@ export default function EditAgentPolicyPage() {
                 <CardTitle>Policy Configuration</CardTitle>
 
                 <CardDescription>
-                  These values currently update local mock data. Later they can
-                  be connected to Oronyx&apos;s Move contract.
+                  Changes are submitted directly to the AgentCap on-chain, in
+                  a single sponsored transaction.
                 </CardDescription>
               </div>
             </div>
@@ -206,6 +404,7 @@ export default function EditAgentPolicyPage() {
                   value={spendingLimit}
                   onChange={(event) => setSpendingLimit(event.target.value)}
                   className="pr-14"
+                  disabled={!isOwner}
                 />
 
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -234,6 +433,7 @@ export default function EditAgentPolicyPage() {
                   value={periodLimit}
                   onChange={(event) => setPeriodLimit(event.target.value)}
                   className="pr-14"
+                  disabled={!isOwner}
                 />
 
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -251,17 +451,32 @@ export default function EditAgentPolicyPage() {
             {/* PERIOD LENGTH */}
 
             <div className="grid gap-2">
-              <Label htmlFor="period-length">Period Length</Label>
+              <Label>Period Length</Label>
 
-              <Input
-                id="period-length"
+              <Select
                 value={periodLength}
-                onChange={(event) => setPeriodLength(event.target.value)}
-                placeholder="Example: 24 hours"
-              />
+                onValueChange={(value) => {
+                  if (typeof value === "string") setPeriodLength(value);
+                }}
+                disabled={!isOwner}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectGroup>
+                    {PERIOD_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
               <p className="text-xs text-muted-foreground">
-                Example: 24 hours, 7 days, 30 days
+                The spending limit resets after this period.
               </p>
             </div>
 
@@ -277,6 +492,7 @@ export default function EditAgentPolicyPage() {
                 max="100"
                 value={riskThreshold}
                 onChange={(event) => setRiskThreshold(event.target.value)}
+                disabled={!isOwner}
               />
 
               <div className="flex items-center justify-between">
@@ -299,45 +515,120 @@ export default function EditAgentPolicyPage() {
             {/* EXPIRY */}
 
             <div className="grid gap-2">
-              <Label htmlFor="expiry">Policy Expiry</Label>
+              <Label>Policy Expiry</Label>
 
-              <Input
-                id="expiry"
+              <Select
                 value={expiry}
-                onChange={(event) => setExpiry(event.target.value)}
-                placeholder="Example: 30 days"
-              />
-            </div>
+                onValueChange={(value) => {
+                  if (typeof value === "string") setExpiry(value);
+                }}
+                disabled={!isOwner}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select expiry" />
+                </SelectTrigger>
 
-            {/* ALLOWED ACTIONS */}
-
-            <div className="grid gap-2">
-              <Label htmlFor="allowed-actions">Allowed Actions</Label>
-
-              <Input
-                id="allowed-actions"
-                value={allowedActions}
-                onChange={(event) => setAllowedActions(event.target.value)}
-                placeholder="SWAP, STAKE, TRANSFER"
-              />
+                <SelectContent>
+                  <SelectGroup>
+                    {EXPIRY_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
               <p className="text-xs text-muted-foreground">
-                Separate multiple actions using commas.
+                Resets to now + the selected duration when saved.
               </p>
+            </div>
 
-              {allowedActions.trim() && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {allowedActions
-                    .split(",")
-                    .map((action) => action.trim())
-                    .filter(Boolean)
-                    .map((action) => (
-                      <Badge key={action} variant="secondary">
-                        {action.toUpperCase()}
-                      </Badge>
-                    ))}
-                </div>
-              )}
+            {/* ALLOWED ACTIONS (read-only) */}
+
+            <div className="grid gap-2">
+              <Label>Allowed Actions</Label>
+
+              <div className="flex flex-wrap gap-2">
+                {detail.allowed_actions.map((code) => (
+                  <Badge key={code} variant="secondary" className="opacity-60">
+                    {ACTION_LABELS[code] ?? `ACTION_${code}`}
+                  </Badge>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Fixed at creation — the contract has no way to change allowed
+                actions after the agent is created.
+              </p>
+            </div>
+
+            {/* ALLOWED TARGETS */}
+
+            <div className="grid gap-2">
+              <Label>Allowed Targets</Label>
+
+              <div className="flex flex-wrap gap-2">
+                {targets.length === 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    No targets allowed yet.
+                  </span>
+                )}
+
+                {targets.map((target) => {
+                  const isProtocol = detail.protocol_targets
+                    .map((address) => address.toLowerCase())
+                    .includes(target.toLowerCase());
+
+                  return (
+                    <Badge
+                      key={target}
+                      variant={isProtocol ? "outline" : "secondary"}
+                      title={target}
+                      className="gap-1"
+                    >
+                      {isProtocol && <Lock className="size-3" />}
+                      {`${target.slice(0, 6)}…${target.slice(-4)}`}
+                      {!isProtocol && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTarget(target)}
+                          disabled={!isOwner}
+                          aria-label={`Remove ${target}`}
+                          className="ml-1 disabled:pointer-events-none"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      )}
+                    </Badge>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  value={newTarget}
+                  onChange={(event) => setNewTarget(event.target.value)}
+                  placeholder="0x..."
+                  disabled={!isOwner}
+                />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-lg"
+                  disabled={!isOwner || !newTarget.trim()}
+                  onClick={handleAddTarget}
+                >
+                  <Plus className="size-4" />
+                  Add
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Addresses marked with a lock are required by an enabled
+                action and can&apos;t be removed here.
+              </p>
             </div>
           </CardContent>
 
@@ -345,7 +636,7 @@ export default function EditAgentPolicyPage() {
             <Button
               variant="outline"
               className="rounded-lg"
-              onClick={() => router.push(`/agents/${agent.id}`)}
+              onClick={() => router.push(`/agents/${capId}`)}
             >
               Cancel
             </Button>
