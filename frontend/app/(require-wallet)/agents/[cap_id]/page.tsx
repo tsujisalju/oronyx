@@ -2,7 +2,7 @@
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Power, Vault } from "lucide-react";
+import { ArrowLeft, Lock, Pencil, Power, Vault } from "lucide-react";
 
 import {
   Dialog,
@@ -43,6 +43,7 @@ import {
 
 import { Agent, agentFromDetail, saveMockAgent } from "@/lib/agents";
 import { getAgent } from "@/lib/agent-service";
+import EditableAgentName from "@/components/editable-agent-name";
 
 function AgentSkeleton() {
   return (
@@ -160,6 +161,16 @@ function AgentSkeleton() {
 
             <div className="rounded-lg border bg-muted/20 p-4">
               <p className="text-sm text-muted-foreground">Allowed Actions</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="text-sm text-muted-foreground font-skeleton animate-pulse">
+                  Not configured
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4 md:col-span-2">
+              <p className="text-sm text-muted-foreground">Allowed Targets</p>
 
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="text-sm text-muted-foreground font-skeleton animate-pulse">
@@ -376,7 +387,16 @@ export default function AgentPage() {
           <div>
             <p className="text-sm text-muted-foreground">Autonomous Agent</p>
 
-            <h1 className="mt-1 text-3xl font-semibold">{agent.name}</h1>
+            <h1 className="mt-1 text-3xl font-semibold">
+              <EditableAgentName
+                name={agent.name}
+                capId={agent.capId}
+                owner={agent.owner}
+                onSaved={(newName) =>
+                  setAgent({ ...agent, name: newName, hasName: true })
+                }
+              />
+            </h1>
 
             <p className="mt-2 text-muted-foreground">
               Manage this agent&apos;s vault, status, and policy.
@@ -645,6 +665,35 @@ export default function AgentPage() {
                       {action}
                     </Badge>
                   ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    Not configured
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-4 md:col-span-2">
+              <p className="text-sm text-muted-foreground">Allowed Targets</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {agent.allowedTargets?.length ? (
+                  agent.allowedTargets.map((target) => {
+                    const isProtocol =
+                      agent.protocolTargets?.includes(target) ?? false;
+
+                    return (
+                      <Badge
+                        key={target}
+                        variant={isProtocol ? "outline" : "secondary"}
+                        title={target}
+                        className="gap-1"
+                      >
+                        {isProtocol && <Lock className="size-3" />}
+                        {`${target.slice(0, 6)}…${target.slice(-4)}`}
+                      </Badge>
+                    );
+                  })
                 ) : (
                   <span className="text-sm text-muted-foreground">
                     Not configured

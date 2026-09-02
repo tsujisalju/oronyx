@@ -41,43 +41,17 @@ import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-import { Agent } from "@/lib/agents";
+import {
+  Agent,
+  ACTION_CODES,
+  DURATION_MS,
+  EXPIRY_OPTIONS,
+  PERIOD_OPTIONS,
+} from "@/lib/agents";
 
 const AVAILABLE_ACTIONS = ["SWAP", "STAKE", "TRANSFER"];
 
-const PERIOD_OPTIONS = [
-  "1 hour",
-  "6 hours",
-  "12 hours",
-  "24 hours",
-  "7 days",
-  "30 days",
-];
-
-const EXPIRY_OPTIONS = ["7 days", "14 days", "30 days", "60 days", "90 days"];
-
 type ConfigMode = "natural" | "advanced";
-
-// Mirrors oronyx::capability's private action-type codes. "SWAP" maps to
-// ACTION_MOCK_SWAP (not ACTION_CETUS_SWAP), consistent with this project's
-// established default of the mock DEX over Cetus for demo reliability.
-const ACTION_CODES: Record<string, number> = {
-  TRANSFER: 0,
-  SWAP: 1,
-  STAKE: 2,
-};
-
-const DURATION_MS: Record<string, number> = {
-  "1 hour": 3_600_000,
-  "6 hours": 6 * 3_600_000,
-  "12 hours": 12 * 3_600_000,
-  "24 hours": 24 * 3_600_000,
-  "7 days": 7 * 24 * 3_600_000,
-  "14 days": 14 * 24 * 3_600_000,
-  "30 days": 30 * 24 * 3_600_000,
-  "60 days": 60 * 24 * 3_600_000,
-  "90 days": 90 * 24 * 3_600_000,
-};
 
 const MIST_PER_SUI = 1_000_000_000;
 const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
