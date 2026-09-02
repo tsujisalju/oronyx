@@ -2,7 +2,17 @@
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Lock, Pencil, Power, Vault } from "lucide-react";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
+import {
+  ArrowLeft,
+  CircleArrowDown,
+  CircleArrowUp,
+  Lock,
+  Pencil,
+  Power,
+  Vault,
+} from "lucide-react";
 
 import {
   Dialog,
@@ -41,9 +51,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { Agent, agentFromDetail, saveMockAgent } from "@/lib/agents";
+import { Slider } from "@/components/ui/slider";
+
+import {
+  Agent,
+  agentFromDetail,
+  MIST_PER_SUI,
+  saveMockAgent,
+} from "@/lib/agents";
 import { getAgent } from "@/lib/agent-service";
 import EditableAgentName from "@/components/editable-agent-name";
+import { useSuiBalance } from "@/lib/use-sui-balance";
+import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
+
+const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
+
+const PERCENT_OPTIONS = [0, 25, 50, 75, 100];
 
 function AgentSkeleton() {
   return (
@@ -83,7 +106,7 @@ function AgentSkeleton() {
               <div>
                 <CardTitle>Agent Vault</CardTitle>
                 <CardDescription>
-                  Mock balance controls for frontend testing.
+                  Deposit and withdraw SUI directly from the agent&apos;s vault.
                 </CardDescription>
               </div>
             </div>
@@ -204,6 +227,7 @@ function AgentSkeleton() {
 export default function AgentPage() {
   const params = useParams();
   const router = useRouter();
+  const account = useCurrentAccount();
 
   const agentId = params.cap_id as string;
 
@@ -215,6 +239,22 @@ export default function AgentPage() {
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [depositPercent, setDepositPercent] = useState(0);
+  const [withdrawPercent, setWithdrawPercent] = useState(0);
+
+  const { balanceMist: walletBalanceMist, refetch: refetchWalletBalance } =
+    useSuiBalance(account?.address);
+
+  const loadAgent = async () => {
+    try {
+      const detail = await getAgent(agentId);
+      setAgent(detail ? agentFromDetail(detail) : null);
+    } catch (error: unknown) {
+      setLoadError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -248,61 +288,119 @@ export default function AgentPage() {
     };
   }, [agentId]);
 
-  // Deposit/Withdraw/Activate/Deactivate remain local-mock only (no real
-  // transaction) — persist() updates local state + localStorage for this
-  // session, matching the existing behavior before this page fetched real
-  // data. Since the page now always re-fetches real data on mount, these
-  // mock mutations won't persist visibly across a reload — a known,
-  // accepted limitation until these are wired to real transactions.
+  // Activate/Deactivate remain local-mock only (no real transaction) —
+  // persist() updates local state + localStorage for this session. Since the
+  // page re-fetches real data on mount, these mock mutations won't persist
+  // visibly across a reload — a known, accepted limitation until these are
+  // wired to real transactions.
   function persist(updatedAgent: Agent) {
     saveMockAgent(updatedAgent);
     setAgent(updatedAgent);
   }
 
-  function handleDeposit() {
-    if (!agent) return;
+  const isOwner = account?.address === agent?.owner;
+
+  async function handleDeposit() {
+    if (!agent?.vaultId || !account) return;
 
     const amount = Number.parseFloat(depositAmount);
-
     if (!Number.isFinite(amount) || amount <= 0) return;
 
-    const currentBalance = Number.parseFloat(agent.vaultBalance) || 0;
+    setIsDepositing(true);
 
-    persist({
-      ...agent,
-      vaultBalance: `${(currentBalance + amount).toFixed(2)} SUI`,
-    });
+    try {
+      const amountMist = Math.round(amount * MIST_PER_SUI);
 
-    toast.success("Deposit successful", {
-      description: `${amount.toFixed(2)} SUI was added to ${agent.name}'s vault.`,
-    });
+      const tx = new Transaction();
+      tx.setSender(account.address);
+      const coin = tx.add(
+        coinWithBalance({ balance: amountMist, useGasCoin: false }),
+      );
+      tx.moveCall({
+        target: `${PACKAGE_ID}::capability::deposit`,
+        arguments: [tx.object(agent.vaultId), coin],
+      });
 
-    setDepositAmount("");
-    setDepositOpen(false);
+      const result = await signAndExecuteSponsoredTransaction({
+        transaction: tx,
+        sender: account.address,
+        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::deposit`],
+        allowedAddresses: [account.address],
+      });
+
+      if (result.$kind !== "Transaction") {
+        throw new Error("Sponsored transaction failed");
+      }
+
+      await loadAgent();
+      refetchWalletBalance();
+
+      toast.success("Deposit successful", {
+        description: `${amount.toFixed(2)} SUI was added to ${agent.name}'s vault.`,
+      });
+
+      setDepositAmount("");
+      setDepositPercent(0);
+      setDepositOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to deposit", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsDepositing(false);
+    }
   }
 
-  function handleWithdraw() {
-    if (!agent) return;
+  async function handleWithdraw() {
+    if (!agent?.vaultId || !account) return;
 
     const amount = Number.parseFloat(withdrawAmount);
-
     if (!Number.isFinite(amount) || amount <= 0) return;
 
-    const currentBalance = Number.parseFloat(agent.vaultBalance) || 0;
+    const currentBalanceMist = agent.vaultBalanceMist ?? 0;
+    const amountMist = Math.round(amount * MIST_PER_SUI);
+    if (amountMist > currentBalanceMist) return;
 
-    if (amount > currentBalance) return;
+    setIsWithdrawing(true);
 
-    persist({
-      ...agent,
-      vaultBalance: `${(currentBalance - amount).toFixed(2)} SUI`,
-    });
+    try {
+      const tx = new Transaction();
+      const coin = tx.moveCall({
+        target: `${PACKAGE_ID}::capability::withdraw`,
+        arguments: [tx.object(agent.vaultId), tx.pure.u64(amountMist)],
+      });
+      tx.transferObjects([coin], tx.pure.address(account.address));
 
-    toast.success("Withdrawal successful", {
-      description: `${amount.toFixed(2)} SUI was withdrawn from ${agent.name}'s vault.`,
-    });
+      const result = await signAndExecuteSponsoredTransaction({
+        transaction: tx,
+        sender: account.address,
+        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::withdraw`],
+        allowedAddresses: [account.address],
+      });
 
-    setWithdrawAmount("");
-    setWithdrawOpen(false);
+      if (result.$kind !== "Transaction") {
+        throw new Error("Sponsored transaction failed");
+      }
+
+      await loadAgent();
+      refetchWalletBalance();
+
+      toast.success("Withdrawal successful", {
+        description: `${amount.toFixed(2)} SUI was withdrawn from ${agent.name}'s vault.`,
+      });
+
+      setWithdrawAmount("");
+      setWithdrawPercent(0);
+      setWithdrawOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to withdraw", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsWithdrawing(false);
+    }
   }
 
   function handleDeactivate() {
@@ -365,7 +463,23 @@ export default function AgentPage() {
     );
   }
 
-  const numericBalance = Number.parseFloat(agent.vaultBalance) || 0;
+  const vaultBalanceMist = agent.vaultBalanceMist ?? 0;
+  const numericBalance = vaultBalanceMist / MIST_PER_SUI;
+
+  function applyDepositPercent(percent: number) {
+    setDepositPercent(percent);
+    if (walletBalanceMist == null) return;
+    setDepositAmount(
+      ((walletBalanceMist * percent) / 100 / MIST_PER_SUI).toFixed(2),
+    );
+  }
+
+  function applyWithdrawPercent(percent: number) {
+    setWithdrawPercent(percent);
+    setWithdrawAmount(
+      ((vaultBalanceMist * percent) / 100 / MIST_PER_SUI).toFixed(2),
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -424,7 +538,7 @@ export default function AgentPage() {
               <div>
                 <CardTitle>Agent Vault</CardTitle>
                 <CardDescription>
-                  Mock balance controls for frontend testing.
+                  Deposit and withdraw SUI directly from the agent&apos;s vault.
                 </CardDescription>
               </div>
             </div>
@@ -434,13 +548,21 @@ export default function AgentPage() {
             <p className="text-sm text-muted-foreground">Vault Balance</p>
 
             <p className="mt-1 text-3xl font-semibold">{agent.vaultBalance}</p>
+
+            {!isOwner && (
+              <p className="mt-2 text-sm text-destructive">
+                Only the vault&apos;s owner can deposit or withdraw funds.
+              </p>
+            )}
           </CardContent>
 
           <CardFooter className="gap-3 border-t pt-5">
             {/* DEPOSIT */}
 
             <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
-              <DialogTrigger render={<Button className="rounded-lg" />}>
+              <DialogTrigger
+                render={<Button className="rounded-lg" disabled={!isOwner} />}
+              >
                 Deposit
               </DialogTrigger>
 
@@ -477,9 +599,38 @@ export default function AgentPage() {
                     </div>
                   </div>
 
+                  <div className="grid gap-2">
+                    <Slider
+                      value={[depositPercent]}
+                      onValueChange={(value) => {
+                        const pct = Array.isArray(value) ? value[0] : value;
+                        if (typeof pct === "number") applyDepositPercent(pct);
+                      }}
+                      min={0}
+                      max={100}
+                      step={5}
+                    />
+
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      {PERCENT_OPTIONS.map((percent) => (
+                        <span key={percent}>{percent}%</span>
+                      ))}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Wallet Balance:{" "}
+                      {walletBalanceMist != null
+                        ? `${(walletBalanceMist / MIST_PER_SUI).toFixed(2)} SUI`
+                        : "—"}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <CircleArrowDown className="text-muted-foreground" />
+                  </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-sm text-muted-foreground">
-                      Current Balance
+                      Current Vault Balance
                     </p>
 
                     <p className="mt-1 font-medium">{agent.vaultBalance}</p>
@@ -492,6 +643,7 @@ export default function AgentPage() {
                     onClick={() => {
                       setDepositOpen(false);
                       setDepositAmount("");
+                      setDepositPercent(0);
                     }}
                   >
                     Cancel
@@ -501,10 +653,11 @@ export default function AgentPage() {
                     onClick={handleDeposit}
                     disabled={
                       !Number.isFinite(Number.parseFloat(depositAmount)) ||
-                      Number.parseFloat(depositAmount) <= 0
+                      Number.parseFloat(depositAmount) <= 0 ||
+                      isDepositing
                     }
                   >
-                    Deposit
+                    {isDepositing ? "Depositing..." : "Deposit"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -514,7 +667,13 @@ export default function AgentPage() {
 
             <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
               <DialogTrigger
-                render={<Button variant="outline" className="rounded-lg" />}
+                render={
+                  <Button
+                    variant="outline"
+                    className="rounded-lg"
+                    disabled={!isOwner}
+                  />
+                }
               >
                 Withdraw
               </DialogTrigger>
@@ -552,9 +711,31 @@ export default function AgentPage() {
                     </div>
                   </div>
 
+                  <div className="grid gap-2">
+                    <Slider
+                      value={[withdrawPercent]}
+                      onValueChange={(value) => {
+                        const pct = Array.isArray(value) ? value[0] : value;
+                        if (typeof pct === "number") applyWithdrawPercent(pct);
+                      }}
+                      min={0}
+                      max={100}
+                      step={25}
+                    />
+
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      {PERCENT_OPTIONS.map((percent) => (
+                        <span key={percent}>{percent}%</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <CircleArrowUp className="text-muted-foreground" />
+                  </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-sm text-muted-foreground">
-                      Available Balance
+                      Available Vault Balance
                     </p>
 
                     <p className="mt-1 font-medium">{agent.vaultBalance}</p>
@@ -573,6 +754,7 @@ export default function AgentPage() {
                     onClick={() => {
                       setWithdrawOpen(false);
                       setWithdrawAmount("");
+                      setWithdrawPercent(0);
                     }}
                   >
                     Cancel
@@ -583,10 +765,11 @@ export default function AgentPage() {
                     disabled={
                       !Number.isFinite(Number.parseFloat(withdrawAmount)) ||
                       Number.parseFloat(withdrawAmount) <= 0 ||
-                      Number.parseFloat(withdrawAmount) > numericBalance
+                      Number.parseFloat(withdrawAmount) > numericBalance ||
+                      isWithdrawing
                     }
                   >
-                    Withdraw
+                    {isWithdrawing ? "Withdrawing..." : "Withdraw"}
                   </Button>
                 </DialogFooter>
               </DialogContent>

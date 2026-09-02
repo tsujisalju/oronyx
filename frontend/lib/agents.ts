@@ -5,6 +5,9 @@ export type Agent = {
   name: string;
   status: "ACTIVE" | "INACTIVE";
   vaultBalance: string;
+  // Raw MIST value backing `vaultBalance`'s formatted string — needed for
+  // percentage-of-balance calculations (e.g. the withdraw slider).
+  vaultBalanceMist?: number;
   riskThreshold: number;
   spendingLimit: string;
 
@@ -146,6 +149,7 @@ export function agentFromDetail(detail: AgentDetail): Agent {
     hasName: detail.name != null,
     status: detail.active ? "ACTIVE" : "INACTIVE",
     vaultBalance: formatMist(detail.vault_balance),
+    vaultBalanceMist: detail.vault_balance,
     riskThreshold: detail.risk_threshold,
     spendingLimit: formatMist(detail.spending_limit_per_tx),
     allowedActions: detail.allowed_actions.map(
