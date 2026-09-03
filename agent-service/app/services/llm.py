@@ -141,7 +141,12 @@ DECISION_TOOL = {
                 "description": (
                     "Amount to act with, in MIST, as a decimal string "
                     "(never a number, to avoid precision loss). Required "
-                    "when decision is 'act', null otherwise."
+                    "when decision is 'act', null otherwise. Must not "
+                    "exceed the agent's actual vault_balance — vault_balance "
+                    "is the real deposited funds, a separate and often "
+                    "tighter constraint than spending_limit_per_tx/period "
+                    "(which are only permission ceilings, not available "
+                    "funds). The proposed amount must satisfy all three."
                 ),
             },
             "target": {
@@ -178,7 +183,13 @@ Rules:
 1. Only propose a target that is already in the agent's allowed targets —
    never invent or suggest a target outside that list.
 2. Never propose an amount that would exceed spending_limit_per_tx, or
-   that would push period_spent over spending_limit_period.
+   that would push period_spent over spending_limit_period. Independently
+   of that, never propose an amount that exceeds vault_balance —
+   vault_balance is the agent's actual deposited funds, not a permission
+   ceiling like the spending limits, and it can be smaller than them. The
+   proposed amount must be within all three simultaneously (effectively,
+   at most the minimum of vault_balance, spending_limit_per_tx, and the
+   remaining spending_limit_period - period_spent).
 3. Always give a reasoning string, even for no_action — this is the only
    record of why an opportunity was skipped.
 4. If recent activity shows the agent already acted on a very similar

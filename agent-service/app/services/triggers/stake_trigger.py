@@ -25,12 +25,23 @@ MIN_STAKING_THRESHOLD_MIST = 1_000_000_000
 COMMISSION_CHANGE_THRESHOLD_BPS = 50
 
 
-async def check_stake_trigger(force: bool = False) -> None:
+async def check_stake_trigger(force: bool = False, simulate_commission_change_bps: int | None = None) -> None:
     """
     :param force: Skip the epoch-change and commission-move gates and run
         the candidate decision pass regardless (falling back to the full
         current validator set as "changed") — for manual testing via the
         /agents/dev endpoints, not used by the scheduled job.
+    :param simulate_commission_change_bps: Only used when force=True.
+        Real validator addresses never match a candidate's allowed_targets
+        (those are this project's own mock/demo targets, not real testnet
+        validators), so simply forcing the gate open never produces a
+        legitimate "act" — the LLM correctly declines to stake with a
+        validator the agent isn't permitted to use. When set, the
+        changed-validators context is built per-candidate instead (see
+        _decide_for_candidate), synthesizing an entry for the candidate's
+        own allowed target with this commission delta, so there's an
+        actionable opportunity on a target the agent can actually use.
+        Never written to validator_data's real last-seen-state cache.
     """
     state = await validator_data.get_system_state()
     last_state = validator_data.get_last_seen_state()
@@ -53,17 +64,27 @@ async def check_stake_trigger(force: bool = False) -> None:
             >= COMMISSION_CHANGE_THRESHOLD_BPS
         ]
 
-    if not changed_validators:
+    if not changed_validators and simulate_commission_change_bps is None:
         if not force:
             return
         changed_validators = state.validators
 
     candidates = agent_index.get_candidate_agents(ActionType.STAKE)
     for candidate in candidates:
-        await _decide_for_candidate(candidate, state, changed_validators)
+        try:
+            await _decide_for_candidate(
+                candidate, state, changed_validators, simulate_commission_change_bps
+            )
+        except Exception:
+            logger.exception("stake_trigger: decision pass failed for cap %s, continuing with remaining candidates", candidate.cap_id)
 
 
-async def _decide_for_candidate(candidate, state, changed_validators) -> None:
+async def _decide_for_candidate(
+    candidate,
+    state,
+    changed_validators,
+    simulate_commission_change_bps: int | None = None,
+) -> None:
     detail = await sui_objects.get_agent_detail(candidate.cap_id)
     if detail is None or not detail.active:
         return
@@ -91,21 +112,39 @@ async def _decide_for_candidate(candidate, state, changed_validators) -> None:
         )
         return
 
-    recent = activity_log.get_recent_activity(candidate.cap_id, limit=10)
+    recent = activity_log.get_recent_activity(candidate.cap_id, ActionType.STAKE, limit=10)
+
+    simulated = simulate_commission_change_bps is not None
+    if simulated:
+        # Real validator addresses never match a candidate's
+        # allowed_targets in this project, so build the "changed" entry
+        # directly on the candidate's own allowed target instead of the
+        # real global validator set — see check_stake_trigger's docstring.
+        reported_validators = [
+            {
+                "address": target,
+                "name": "(simulated opportunity)",
+                "commission_rate_change_bps": simulate_commission_change_bps,
+            }
+            for target in detail.allowed_targets
+        ]
+    else:
+        reported_validators = [
+            {
+                "address": v.address,
+                "name": v.name,
+                "commission_rate": v.commission_rate,
+                "voting_power": v.voting_power,
+            }
+            for v in changed_validators
+        ]
 
     context = {
         "trigger": {
             "type": "validator_set_change",
             "epoch": state.epoch,
-            "changed_validators": [
-                {
-                    "address": v.address,
-                    "name": v.name,
-                    "commission_rate": v.commission_rate,
-                    "voting_power": v.voting_power,
-                }
-                for v in changed_validators
-            ],
+            "changed_validators": reported_validators,
+            "simulated": simulated,
         },
         "agent": {
             "cap_id": detail.cap_id,
@@ -149,6 +188,20 @@ async def _decide_for_candidate(candidate, state, changed_validators) -> None:
         agent_index.mark_decision(candidate.cap_id)
         return
 
+    amount_mist = int(result["amount_mist"])
+    if amount_mist > detail.vault_balance:
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.STAKE,
+            decision="no_action",
+            reasoning=(
+                f"LLM proposed {amount_mist} MIST, exceeding vault_balance "
+                f"{detail.vault_balance}, skipped."
+            ),
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
+
     decision = StakeDecision(
         type="stake",
         cap_id=detail.cap_id,
@@ -158,7 +211,24 @@ async def _decide_for_candidate(candidate, state, changed_validators) -> None:
         validator=target,
     )
 
-    await executor_client.submit_decision(decision)
+    try:
+        await executor_client.submit_decision(decision)
+    except Exception:
+        logger.exception(
+            "stake_trigger: executor submission failed for cap %s, logging as failed act attempt",
+            candidate.cap_id,
+        )
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.STAKE,
+            decision="act_failed",
+            reasoning=result["reasoning"],
+            target=target,
+            amount_mist=decision.amount_mist,
+            risk_score=decision.risk_score,
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
 
     activity_log.log_decision(
         cap_id=candidate.cap_id,

@@ -77,17 +77,23 @@ def log_decision(
         connection.close()
 
 
-def get_recent_activity(cap_id: str, limit: int = 10) -> list[sqlite3.Row]:
+def get_recent_activity(cap_id: str, action_type: int, limit: int = 10) -> list[sqlite3.Row]:
+    """Recent decisions for this cap, scoped to a single action_type —
+    a candidate can allow multiple actions (e.g. MOCK_SWAP and STAKE), and
+    mixing their histories in one LLM context causes cross-contamination
+    (confirmed live: a stake-specific constraint leaking into swap
+    reasoning).
+    """
     connection = _connect()
     try:
         return connection.execute(
             """
             SELECT * FROM activity_log
-            WHERE cap_id = ?
+            WHERE cap_id = ? AND action_type = ?
             ORDER BY created_at DESC
             LIMIT ?
             """,
-            (cap_id, limit),
+            (cap_id, action_type, limit),
         ).fetchall()
     finally:
         connection.close()

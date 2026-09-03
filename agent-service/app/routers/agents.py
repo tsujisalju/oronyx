@@ -206,18 +206,32 @@ def dev_candidates(action_type: Annotated[int, Query()]):
 
 
 @router.post("/dev/check-swap-trigger")
-async def dev_check_swap_trigger(force: Annotated[bool, Query()] = False):
+async def dev_check_swap_trigger(
+    force: Annotated[bool, Query()] = False,
+    simulate_pct_change: Annotated[
+        float | None,
+        Query(description="Only used with force=true. Reports this synthetic price move to the LLM instead of the real one."),
+    ] = None,
+):
     """Manually run the swap trigger check, for testing outside the
     scheduled interval. force=true bypasses the price-move threshold so
     candidates get a decision pass regardless of the real market move."""
-    await check_swap_trigger(force=force)
+    await check_swap_trigger(force=force, simulate_pct_change=simulate_pct_change)
     return {"status": "ok"}
 
 
 @router.post("/dev/check-stake-trigger")
-async def dev_check_stake_trigger(force: Annotated[bool, Query()] = False):
+async def dev_check_stake_trigger(
+    force: Annotated[bool, Query()] = False,
+    simulate_commission_change_bps: Annotated[
+        int | None,
+        Query(description="Only used with force=true. Synthesizes a commission-change opportunity on each candidate's own allowed target."),
+    ] = None,
+):
     """Manually run the stake trigger check, for testing outside the
     scheduled interval. force=true bypasses the epoch/commission-move
     gates so candidates get a decision pass regardless."""
-    await check_stake_trigger(force=force)
+    await check_stake_trigger(
+        force=force, simulate_commission_change_bps=simulate_commission_change_bps
+    )
     return {"status": "ok"}

@@ -18,11 +18,17 @@ logger = logging.getLogger(__name__)
 SWAP_TRIGGER_THRESHOLD_PCT = Decimal("2.0")
 
 
-async def check_swap_trigger(force: bool = False) -> None:
+async def check_swap_trigger(force: bool = False, simulate_pct_change: float | None = None) -> None:
     """
     :param force: Skip the price-move threshold gate and run the candidate
         decision pass regardless — for manual testing via the /agents/dev
         endpoints, not used by the scheduled job.
+    :param simulate_pct_change: Only used when force=True. Reports a
+        synthetic price move to the LLM (last_price scaled by this
+        percent) instead of the real one, so a genuinely flat real price
+        can still produce a legitimate "act" decision during testing.
+        Never written to market_data's real last-seen-price cache, so it
+        can't corrupt the next real (non-forced) scheduled run.
     """
     pool_id = settings.deepbook_price_pool_id
     if not pool_id:
@@ -38,6 +44,7 @@ async def check_swap_trigger(force: bool = False) -> None:
     last_price = market_data.get_last_seen_price(pool_id)
     market_data.set_last_seen_price(pool_id, current_price)
 
+    simulated = False
     if not force:
         if last_price is None or last_price == 0:
             return
@@ -46,19 +53,34 @@ async def check_swap_trigger(force: bool = False) -> None:
         if pct_change < SWAP_TRIGGER_THRESHOLD_PCT:
             return
     else:
-        pct_change = (
-            abs((current_price - last_price) / last_price) * 100
-            if last_price
-            else Decimal("0")
-        )
         last_price = last_price if last_price is not None else current_price
+
+        if simulate_pct_change is not None:
+            simulated = True
+            current_price = last_price * (1 + Decimal(str(simulate_pct_change)) / 100)
+            pct_change = abs(Decimal(str(simulate_pct_change)))
+        else:
+            pct_change = (
+                abs((current_price - last_price) / last_price) * 100
+                if last_price
+                else Decimal("0")
+            )
 
     candidates = agent_index.get_candidate_agents(ActionType.MOCK_SWAP)
     for candidate in candidates:
-        await _decide_for_candidate(candidate, current_price, last_price, pct_change)
+        try:
+            await _decide_for_candidate(candidate, current_price, last_price, pct_change, simulated)
+        except Exception:
+            logger.exception("swap_trigger: decision pass failed for cap %s, continuing with remaining candidates", candidate.cap_id)
 
 
-async def _decide_for_candidate(candidate, current_price: Decimal, last_price: Decimal, pct_change: Decimal) -> None:
+async def _decide_for_candidate(
+    candidate,
+    current_price: Decimal,
+    last_price: Decimal,
+    pct_change: Decimal,
+    simulated: bool = False,
+) -> None:
     detail = await sui_objects.get_agent_detail(candidate.cap_id)
     if detail is None or not detail.active:
         return
@@ -72,7 +94,7 @@ async def _decide_for_candidate(candidate, current_price: Decimal, last_price: D
         )
         return
 
-    recent = activity_log.get_recent_activity(candidate.cap_id, limit=10)
+    recent = activity_log.get_recent_activity(candidate.cap_id, ActionType.MOCK_SWAP, limit=10)
 
     context = {
         "trigger": {
@@ -81,6 +103,7 @@ async def _decide_for_candidate(candidate, current_price: Decimal, last_price: D
             "last_price": str(last_price),
             "current_price": str(current_price),
             "pct_change": str(pct_change),
+            "simulated": simulated,
         },
         "agent": {
             "cap_id": detail.cap_id,
@@ -124,6 +147,20 @@ async def _decide_for_candidate(candidate, current_price: Decimal, last_price: D
         agent_index.mark_decision(candidate.cap_id)
         return
 
+    amount_mist = int(result["amount_mist"])
+    if amount_mist > detail.vault_balance:
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.MOCK_SWAP,
+            decision="no_action",
+            reasoning=(
+                f"LLM proposed {amount_mist} MIST, exceeding vault_balance "
+                f"{detail.vault_balance}, skipped."
+            ),
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
+
     decision = MockSwapDecision(
         type="mock_swap",
         cap_id=detail.cap_id,
@@ -133,7 +170,24 @@ async def _decide_for_candidate(candidate, current_price: Decimal, last_price: D
         mock_pool_id=target,
     )
 
-    await executor_client.submit_decision(decision)
+    try:
+        await executor_client.submit_decision(decision)
+    except Exception:
+        logger.exception(
+            "swap_trigger: executor submission failed for cap %s, logging as failed act attempt",
+            candidate.cap_id,
+        )
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.MOCK_SWAP,
+            decision="act_failed",
+            reasoning=result["reasoning"],
+            target=target,
+            amount_mist=decision.amount_mist,
+            risk_score=decision.risk_score,
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
 
     activity_log.log_decision(
         cap_id=candidate.cap_id,
