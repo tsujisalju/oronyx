@@ -13,7 +13,7 @@ from app.models.policy import ActionType, MockSwapDecision
 from app.services import (
     activity_log,
     agent_index,
-    executor_client,
+    executor,
     market_data,
     sui_objects,
 )
@@ -188,7 +188,7 @@ async def _decide_for_candidate(
     )
 
     try:
-        await executor_client.submit_decision(decision)
+        await executor.execute_agent_action(decision)
     except Exception:
         logger.exception(
             "swap_trigger: executor submission failed for cap %s, logging as failed act attempt",
