@@ -137,6 +137,26 @@ export function formatExpiry(expiryMs: number): string {
   return new Date(expiryMs).toLocaleString();
 }
 
+export type DurationUnit = "hours" | "days";
+
+// Decomposes a ms duration into a value+unit pair for free-form period/expiry
+// inputs — used to reflect LLM-generated durations that don't land on a
+// fixed preset (e.g. "every 10 hours").
+export function msToDurationInput(ms: number): {
+  value: number;
+  unit: DurationUnit;
+} {
+  const hours = ms / 3_600_000;
+  if (hours >= 24 && hours % 24 === 0) {
+    return { value: hours / 24, unit: "days" };
+  }
+  return { value: Math.round(hours * 100) / 100, unit: "hours" };
+}
+
+export function durationInputToMs(value: number, unit: DurationUnit): number {
+  return unit === "days" ? value * 24 * 3_600_000 : value * 3_600_000;
+}
+
 export function agentFromDetail(detail: AgentDetail): Agent {
   return {
     id: detail.cap_id,

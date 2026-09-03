@@ -49,6 +49,32 @@ export async function saveAgentMetadata({
   return response.json();
 }
 
+export interface ParsedAgentPolicy {
+  spending_limit_per_tx: number;
+  spending_limit_period: number;
+  period_length_ms: number;
+  allowed_actions: number[];
+  allowed_targets: string[];
+  risk_threshold: number;
+  expiry_ms: number;
+}
+
+export async function parsePolicy(text: string): Promise<ParsedAgentPolicy> {
+  const response = await fetch(`${AGENT_SERVICE_URL}/agents/parse-policy`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate policy: ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
 export interface AgentDetail {
   cap_id: string;
   vault_id: string;

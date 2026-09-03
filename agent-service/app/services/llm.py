@@ -4,11 +4,10 @@ from typing import Any
 import anthropic
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 
-MODEL = os.getenv("ORONYX_LLM_MODEL", "claude-sonnet-5")
+MODEL = os.getenv("ORONYX_LLM_MODEL", "claude-haiku-4-5-20251001")
 
 
 POLICY_TOOL = {
@@ -23,22 +22,17 @@ POLICY_TOOL = {
         "properties": {
             "spending_limit_per_tx_sui": {
                 "type": "number",
-                "description": (
-                    "Maximum SUI allowed in a single transaction."
-                ),
+                "description": ("Maximum SUI allowed in a single transaction."),
             },
             "spending_limit_period_sui": {
                 "type": "number",
                 "description": (
-                    "Maximum total SUI spending allowed during "
-                    "the policy period."
+                    "Maximum total SUI spending allowed during the policy period."
                 ),
             },
             "period_length_hours": {
                 "type": "number",
-                "description": (
-                    "Length of the spending period in hours."
-                ),
+                "description": ("Length of the spending period in hours."),
             },
             "allowed_actions": {
                 "type": "array",
@@ -51,9 +45,7 @@ POLICY_TOOL = {
                         "cetus_swap",
                     ],
                 },
-                "description": (
-                    "Actions explicitly allowed by the user."
-                ),
+                "description": ("Actions explicitly allowed by the user."),
             },
             "allowed_targets": {
                 "type": "array",
@@ -72,9 +64,7 @@ POLICY_TOOL = {
                     "medium",
                     "high",
                 ],
-                "description": (
-                    "The user's qualitative risk preference."
-                ),
+                "description": ("The user's qualitative risk preference."),
             },
             "expiry_hours": {
                 "type": ["number", "null"],
@@ -127,8 +117,7 @@ def _get_client() -> anthropic.Anthropic:
 
     if not api_key:
         raise RuntimeError(
-            "ANTHROPIC_API_KEY is not configured. "
-            "Add it to agent-service/.env."
+            "ANTHROPIC_API_KEY is not configured. Add it to agent-service/.env."
         )
 
     return anthropic.Anthropic(api_key=api_key)
@@ -136,33 +125,26 @@ def _get_client() -> anthropic.Anthropic:
 
 def parse_policy_with_llm(text: str) -> dict[str, Any]:
     """
-    Temporary mock LLM response.
-
-    Used until the team provides a real Anthropic API key.
+    Calls the Anthropic API with the parse_agent_policy tool forced, so
+    the response is always structured JSON matching POLICY_TOOL's schema
+    rather than free text we'd have to parse ourselves.
     """
+    client = _get_client()
 
-    text_lower = text.lower()
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        tools=[POLICY_TOOL],
+        tool_choice={"type": "tool", "name": "parse_agent_policy"},
+        messages=[{"role": "user", "content": text}],
+    )
 
-    if "transfer" in text_lower:
-        action = "transfer"
-    elif "stake" in text_lower:
-        action = "stake"
-    else:
-        action = "mock_swap"
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "parse_agent_policy":
+            return block.input
 
-    if "conservative" in text_lower or "low risk" in text_lower:
-        risk = "low"
-    elif "high risk" in text_lower or "aggressive" in text_lower:
-        risk = "high"
-    else:
-        risk = "medium"
-
-    return {
-        "spending_limit_per_tx_sui": 2,
-        "spending_limit_period_sui": 10,
-        "period_length_hours": 1,
-        "allowed_actions": [action],
-        "allowed_targets": [],
-        "risk_stance": risk,
-        "expiry_hours": None,
-    }
+    # Forcing tool_choice should make this unreachable in practice, but
+    # don't silently return something malformed if the API's behavior
+    # ever changes.
+    raise RuntimeError("LLM response did not include the expected tool_use block")

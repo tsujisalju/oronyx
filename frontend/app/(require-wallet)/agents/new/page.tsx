@@ -1,18 +1,25 @@
 "use client";
-import { saveAgentMetadata } from "@/lib/agent-service";
+import {
+  parsePolicy,
+  saveAgentMetadata,
+  ParsedAgentPolicy,
+} from "@/lib/agent-service";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
+  Lock,
+  Plus,
   Save,
   ShieldCheck,
   Sparkles,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
-import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
+import { SUI_CLOCK_OBJECT_ID, isValidSuiAddress } from "@mysten/sui/utils";
 
 import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
 
@@ -38,18 +45,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
   Agent,
   ACTION_CODES,
-  DURATION_MS,
-  EXPIRY_OPTIONS,
-  PERIOD_OPTIONS,
+  ACTION_LABELS,
+  DurationUnit,
+  durationInputToMs,
+  formatDuration,
+  formatExpiry,
+  msToDurationInput,
 } from "@/lib/agents";
 
 const AVAILABLE_ACTIONS = ["SWAP", "STAKE", "TRANSFER"];
+const CETUS_SWAP_CODE = 3;
 
 type ConfigMode = "natural" | "advanced";
 
@@ -79,11 +91,23 @@ export default function NewAgentPage() {
 
   const [periodLimit, setPeriodLimit] = useState("5.00");
 
-  const [periodLength, setPeriodLength] = useState("24 hours");
+  const [periodLengthValue, setPeriodLengthValue] = useState(24);
+  const [periodLengthUnit, setPeriodLengthUnit] =
+    useState<DurationUnit>("hours");
 
   const [riskThreshold, setRiskThreshold] = useState(60);
 
-  const [expiry, setExpiry] = useState("30 days");
+  const [noExpiry, setNoExpiry] = useState(false);
+  const [expiryValue, setExpiryValue] = useState(30);
+  const [expiryUnit, setExpiryUnit] = useState<DurationUnit>("days");
+
+  const [cetusSwapEnabled, setCetusSwapEnabled] = useState(false);
+
+  const [targets, setTargets] = useState<string[]>([]);
+  const [newTarget, setNewTarget] = useState("");
+
+  const [generatedPolicy, setGeneratedPolicy] =
+    useState<ParsedAgentPolicy | null>(null);
 
   const [isCreating, setIsCreating] = useState(false);
 
@@ -101,12 +125,18 @@ export default function NewAgentPage() {
   const periodLimitInvalid =
     !Number.isFinite(numericPeriodLimit) || numericPeriodLimit <= 0;
 
+  const periodLengthInvalid =
+    !Number.isFinite(periodLengthValue) || periodLengthValue <= 0;
+
+  const expiryInvalid =
+    !noExpiry && (!Number.isFinite(expiryValue) || expiryValue <= 0);
+
   const policyInvalid =
     selectedActions.length === 0 ||
     spendingInvalid ||
     periodLimitInvalid ||
-    !periodLength ||
-    !expiry;
+    periodLengthInvalid ||
+    expiryInvalid;
 
   const naturalLanguageInvalid = !instructions.trim() || !policyGenerated;
 
@@ -121,6 +151,31 @@ export default function NewAgentPage() {
         ? current.filter((item) => item !== action)
         : [...current, action],
     );
+  }
+
+  function handleAddTarget() {
+    const candidate = newTarget.trim();
+
+    if (!isValidSuiAddress(candidate)) {
+      toast.error("Invalid address", {
+        description: "Enter a valid Sui address (0x...).",
+      });
+      return;
+    }
+
+    const normalized = candidate.toLowerCase();
+
+    if (targets.some((target) => target.toLowerCase() === normalized)) {
+      toast.error("Address already allowed");
+      return;
+    }
+
+    setTargets((current) => [...current, candidate]);
+    setNewTarget("");
+  }
+
+  function handleRemoveTarget(target: string) {
+    setTargets((current) => current.filter((item) => item !== target));
   }
 
   async function handleGeneratePolicy() {
@@ -138,45 +193,59 @@ export default function NewAgentPage() {
 
     setIsParsing(true);
 
-    /*
-     * TEMPORARY MOCK PARSER
-     *
-     * Later replace this section with:
-     *
-     * POST /parse-policy
-     *
-     * from Waiz's agent-service.
-     */
+    try {
+      const result = await parsePolicy(instructions);
 
-    await new Promise((resolve) => setTimeout(resolve, 900));
+      setSpendingLimit(
+        (result.spending_limit_per_tx / MIST_PER_SUI).toFixed(2),
+      );
+      setPeriodLimit((result.spending_limit_period / MIST_PER_SUI).toFixed(2));
 
-    setSelectedActions(["SWAP", "STAKE"]);
+      const period = msToDurationInput(result.period_length_ms);
+      setPeriodLengthValue(period.value);
+      setPeriodLengthUnit(period.unit);
 
-    setSpendingLimit("0.50");
-    setPeriodLimit("5.00");
-    setPeriodLength("24 hours");
-    setRiskThreshold(60);
-    setExpiry("30 days");
+      if (result.expiry_ms === 0) {
+        setNoExpiry(true);
+      } else {
+        const expiryDuration = msToDurationInput(
+          Math.max(0, result.expiry_ms - Date.now()),
+        );
+        setNoExpiry(false);
+        setExpiryValue(expiryDuration.value);
+        setExpiryUnit(expiryDuration.unit);
+      }
 
-    setPolicyGenerated(true);
-    setIsParsing(false);
-    setConfigMode("advanced");
+      setSelectedActions(
+        result.allowed_actions
+          .filter((code) => code !== CETUS_SWAP_CODE)
+          .map((code) => ACTION_LABELS[code] ?? `ACTION_${code}`),
+      );
+      setCetusSwapEnabled(result.allowed_actions.includes(CETUS_SWAP_CODE));
 
-    toast.success("Policy generated", {
-      description: "Review the generated policy before creating your agent.",
-    });
+      setRiskThreshold(result.risk_threshold);
 
-    /*
-     * After parsing, automatically
-     * move the user into Advanced mode
-     * so they can review the generated
-     * policy.
-     */
-    setConfigMode("advanced");
+      const validTargets = result.allowed_targets.filter(isValidSuiAddress);
+      if (validTargets.length !== result.allowed_targets.length) {
+        toast.warning("Some generated targets were skipped", {
+          description: "They weren't valid Sui addresses.",
+        });
+      }
+      setTargets(validTargets);
 
-    toast.success("Policy generated", {
-      description: "Review the generated policy before creating your agent.",
-    });
+      setGeneratedPolicy(result);
+      setPolicyGenerated(true);
+
+      toast.success("Policy generated", {
+        description: "Review the generated policy before creating your agent.",
+      });
+    } catch (error) {
+      toast.error("Failed to generate policy", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsParsing(false);
+    }
   }
 
   async function handleCreateAgent() {
@@ -190,7 +259,9 @@ export default function NewAgentPage() {
     setIsCreating(true);
 
     try {
-      const actionCodes = selectedActions.map((action) => ACTION_CODES[action]);
+      const actionCodes = selectedActions
+        .map((action) => ACTION_CODES[action])
+        .concat(cetusSwapEnabled ? [CETUS_SWAP_CODE] : []);
       // Only "SWAP" structurally depends on a protocol object today (the
       // mock pool); "STAKE" needs no protocol_targets entry yet since
       // there's no validator-picker field in this form — a stake-capable
@@ -200,6 +271,14 @@ export default function NewAgentPage() {
         ? [MOCK_POOL_ID]
         : [];
 
+      const periodLengthMs = durationInputToMs(
+        periodLengthValue,
+        periodLengthUnit,
+      );
+      const expiryAbsoluteMs = noExpiry
+        ? 0
+        : Date.now() + durationInputToMs(expiryValue, expiryUnit);
+
       const tx = new Transaction();
       tx.moveCall({
         target: `${PACKAGE_ID}::capability::create_agent_cap`,
@@ -207,12 +286,12 @@ export default function NewAgentPage() {
           tx.pure.address(OPERATOR_ADDR),
           tx.pure.u64(Math.round(numericSpendingLimit * MIST_PER_SUI)),
           tx.pure.u64(Math.round(numericPeriodLimit * MIST_PER_SUI)),
-          tx.pure.u64(DURATION_MS[periodLength]),
+          tx.pure.u64(periodLengthMs),
           tx.pure.vector("u8", actionCodes),
-          tx.pure.vector("address", []),
+          tx.pure.vector("address", targets),
           tx.pure.vector("address", protocolTargets),
           tx.pure.u8(riskThreshold),
-          tx.pure.u64(Date.now() + DURATION_MS[expiry]),
+          tx.pure.u64(expiryAbsoluteMs),
           tx.object(SUI_CLOCK_OBJECT_ID),
         ],
       });
@@ -242,19 +321,22 @@ export default function NewAgentPage() {
         );
       }
       try {
-  await saveAgentMetadata({
-    capId: createdCapId,
-    owner: account.address,
-    name: agentName.trim(),
-  });
-} catch (metadataError) {
-  console.error("Failed to save agent metadata:", metadataError);
+        await saveAgentMetadata({
+          capId: createdCapId,
+          owner: account.address,
+          name: agentName.trim(),
+        });
+      } catch (metadataError) {
+        console.error("Failed to save agent metadata:", metadataError);
 
-  toast.warning("Agent created, but its display name could not be saved", {
-    description:
-      "The on-chain agent was created successfully. You can still access it from the Agents page.",
-  });
-}
+        toast.warning(
+          "Agent created, but its display name could not be saved",
+          {
+            description:
+              "The on-chain agent was created successfully. You can still access it from the Agents page.",
+          },
+        );
+      }
 
       const newAgent: Agent = {
         id: createdCapId,
@@ -268,16 +350,19 @@ export default function NewAgentPage() {
 
         spendingLimit: `${numericSpendingLimit.toFixed(2)} SUI`,
 
-        allowedActions: selectedActions,
+        allowedActions: cetusSwapEnabled
+          ? [...selectedActions, "CETUS_SWAP"]
+          : selectedActions,
 
         periodLimit: `${numericPeriodLimit.toFixed(2)} SUI`,
 
-        periodLength,
+        periodLength: formatDuration(periodLengthMs),
 
-        expiry,
+        expiry: noExpiry ? "No expiry" : formatExpiry(expiryAbsoluteMs),
+
+        allowedTargets: targets,
+        protocolTargets,
       };
-
-      
 
       setCreated(true);
 
@@ -333,7 +418,9 @@ export default function NewAgentPage() {
 
           <CardContent>
             <div className="grid gap-2">
-              <Label htmlFor="agent-name">Agent Name</Label>
+              <Label htmlFor="agent-name">
+                Agent Name<span className="text-destructive">*</span>
+              </Label>
 
               <Input
                 id="agent-name"
@@ -403,7 +490,9 @@ export default function NewAgentPage() {
                     onChange={(event) => {
                       setInstructions(event.target.value);
                       setPolicyGenerated(false);
+                      setGeneratedPolicy(null);
                     }}
+                    disabled={isParsing}
                     placeholder="Example: Allow this agent to swap and stake. Limit each transaction to 0.5 SUI, with a total limit of 5 SUI every 24 hours. Flag anything with a risk score above 60."
                     className="min-h-40 resize-none"
                   />
@@ -412,13 +501,20 @@ export default function NewAgentPage() {
                     <p className="text-sm font-medium">How it works</p>
 
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Oronyx interprets your instructions and converts them into
-                      a structured policy. You can review and edit every field
-                      before the agent is created.
+                      {policyGenerated
+                        ? "Policy generated. Edit your description and regenerate to make changes, or switch to the Advanced tab to fine-tune individual fields."
+                        : "Oronyx interprets your instructions and converts them into a structured policy. You can review and edit every field before the agent is created."}
                     </p>
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-end gap-3">
+                    {isParsing && (
+                      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Spinner />
+                        Generating policy...
+                      </span>
+                    )}
+
                     <Button
                       onClick={handleGeneratePolicy}
                       disabled={
@@ -430,6 +526,99 @@ export default function NewAgentPage() {
                       {isParsing ? "Generating..." : "Generate Policy"}
                     </Button>
                   </div>
+
+                  {policyGenerated && generatedPolicy && !isParsing && (
+                    <Card className="bg-muted/20">
+                      <CardHeader>
+                        <CardTitle className="text-base">
+                          Generated Policy Preview
+                        </CardTitle>
+                        <CardDescription>
+                          Review the extracted policy below, or fine-tune it in
+                          the Advanced tab.
+                        </CardDescription>
+                      </CardHeader>
+
+                      <CardContent className="grid gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Allowed Actions
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {selectedActions.map((action) => (
+                              <Badge key={action} variant="secondary">
+                                {action}
+                              </Badge>
+                            ))}
+                            {cetusSwapEnabled && (
+                              <Badge variant="secondary">CETUS_SWAP</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Per-Tx Limit
+                            </p>
+                            <p>{numericSpendingLimit.toFixed(2)} SUI</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Period Limit
+                            </p>
+                            <p>{numericPeriodLimit.toFixed(2)} SUI</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Period Length
+                            </p>
+                            <p>
+                              {periodLengthValue} {periodLengthUnit}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Risk Threshold
+                            </p>
+                            <p>{riskThreshold}%</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Expiry
+                            </p>
+                            <p>
+                              {noExpiry
+                                ? "No expiry"
+                                : `${expiryValue} ${expiryUnit}`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Allowed Targets
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {targets.length === 0 && (
+                              <span className="text-sm text-muted-foreground">
+                                None specified.
+                              </span>
+                            )}
+                            {targets.map((target) => (
+                              <Badge
+                                key={target}
+                                variant="outline"
+                                title={target}
+                              >
+                                {`${target.slice(0, 6)}…${target.slice(-4)}`}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </TabsContent>
 
@@ -472,12 +661,31 @@ export default function NewAgentPage() {
                       })}
                     </div>
 
+                    <label
+                      className={`flex items-center gap-3 rounded-lg border p-4 opacity-60 ${
+                        cetusSwapEnabled
+                          ? "border-primary/40 bg-primary/5"
+                          : "bg-muted/20"
+                      }`}
+                    >
+                      <Checkbox checked={cetusSwapEnabled} disabled />
+                      <span className="font-medium">CETUS_SWAP</span>
+                    </label>
+
+                    <p className="text-xs text-muted-foreground">
+                      CETUS_SWAP is set automatically from a generated policy
+                      and can&apos;t be toggled manually.
+                    </p>
+
                     <div className="flex flex-wrap gap-2">
                       {selectedActions.map((action) => (
                         <Badge key={action} variant="secondary">
                           {action}
                         </Badge>
                       ))}
+                      {cetusSwapEnabled && (
+                        <Badge variant="secondary">CETUS_SWAP</Badge>
+                      )}
                     </div>
 
                     {selectedActions.length === 0 && (
@@ -485,6 +693,74 @@ export default function NewAgentPage() {
                         Select at least one allowed action.
                       </p>
                     )}
+                  </div>
+
+                  {/* ALLOWED TARGETS */}
+
+                  <div className="grid gap-2">
+                    <Label>Allowed Targets</Label>
+
+                    <p className="text-xs text-muted-foreground">
+                      Recipients, validators, pools, or other addresses this
+                      agent may act against.
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      {targets.length === 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          No targets allowed yet.
+                        </span>
+                      )}
+
+                      {targets.map((target) => (
+                        <Badge
+                          key={target}
+                          variant="secondary"
+                          title={target}
+                          className="gap-1"
+                        >
+                          {`${target.slice(0, 6)}…${target.slice(-4)}`}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTarget(target)}
+                            aria-label={`Remove ${target}`}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </Badge>
+                      ))}
+
+                      {selectedActions.includes("SWAP") && (
+                        <Badge variant="outline" className="gap-1">
+                          <Lock className="size-3" />
+                          {`${MOCK_POOL_ID.slice(0, 6)}…${MOCK_POOL_ID.slice(-4)}`}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Input
+                        value={newTarget}
+                        onChange={(event) => setNewTarget(event.target.value)}
+                        placeholder="0x..."
+                      />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-lg"
+                        disabled={!newTarget.trim()}
+                        onClick={handleAddTarget}
+                      >
+                        <Plus className="size-4" />
+                        Add
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Addresses marked with a lock are required by the SWAP
+                      action.
+                    </p>
                   </div>
 
                   {/* SPENDING LIMITS */}
@@ -566,34 +842,51 @@ export default function NewAgentPage() {
                   {/* PERIOD LENGTH */}
 
                   <div className="grid gap-2">
-                    <Label>Period Length</Label>
+                    <Label htmlFor="period-length">Period Length</Label>
 
-                    <Select
-                      value={periodLength}
-                      onValueChange={(value) => {
-                        if (typeof value === "string") {
-                          setPeriodLength(value);
+                    <div className="flex gap-2">
+                      <Input
+                        id="period-length"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={periodLengthValue}
+                        onChange={(event) =>
+                          setPeriodLengthValue(Number(event.target.value))
                         }
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select period" />
-                      </SelectTrigger>
+                        className="flex-1"
+                      />
 
-                      <SelectContent>
-                        <SelectGroup>
-                          {PERIOD_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                      <Select
+                        value={periodLengthUnit}
+                        onValueChange={(value) => {
+                          if (value === "hours" || value === "days") {
+                            setPeriodLengthUnit(value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="hours">Hours</SelectItem>
+                            <SelectItem value="days">Days</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     <p className="text-xs text-muted-foreground">
                       The spending limit resets after this period.
                     </p>
+
+                    {periodLengthInvalid && (
+                      <p className="text-sm text-destructive">
+                        Must be greater than 0.
+                      </p>
+                    )}
                   </div>
 
                   {/* RISK THRESHOLD */}
@@ -668,28 +961,60 @@ export default function NewAgentPage() {
                   <div className="grid gap-2">
                     <Label>Policy Expiry</Label>
 
-                    <Select
-                      value={expiry}
-                      onValueChange={(value) => setExpiry(value ?? "30 days")}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select expiry" />
-                      </SelectTrigger>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={noExpiry}
+                        onCheckedChange={(checked) =>
+                          setNoExpiry(checked === true)
+                        }
+                      />
+                      No expiry
+                    </label>
 
-                      <SelectContent>
-                        <SelectGroup>
-                          {EXPIRY_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    {!noExpiry && (
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={expiryValue}
+                          onChange={(event) =>
+                            setExpiryValue(Number(event.target.value))
+                          }
+                          className="flex-1"
+                        />
+
+                        <Select
+                          value={expiryUnit}
+                          onValueChange={(value) => {
+                            if (value === "hours" || value === "days") {
+                              setExpiryUnit(value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectItem value="hours">Hours</SelectItem>
+                              <SelectItem value="days">Days</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
                     <p className="text-xs text-muted-foreground">
                       The agent policy becomes invalid after this duration.
                     </p>
+
+                    {expiryInvalid && (
+                      <p className="text-sm text-destructive">
+                        Must be greater than 0.
+                      </p>
+                    )}
                   </div>
                 </div>
               </TabsContent>
@@ -739,7 +1064,7 @@ export default function NewAgentPage() {
               </div>
 
               <CardDescription>
-               {agentName} has been created with its configured policy.
+                {agentName} has been created with its configured policy.
               </CardDescription>
             </CardHeader>
 
