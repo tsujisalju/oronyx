@@ -68,7 +68,7 @@ import {
   getAgent,
   listAgents,
 } from "@/lib/agent-service";
-import { approvePendingAction, rejectPendingAction } from "@/lib/pending-actions";
+import { approvePendingAction, rejectPendingAction } from "@/lib/transactions";
 import { usePendingActions, PendingAction } from "@/lib/use-pending-actions";
 import { useMediaQuery } from "@/lib/use-media-query";
 

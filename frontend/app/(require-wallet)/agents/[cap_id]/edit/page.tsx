@@ -5,10 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Lock, Plus, Save, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
-import { Transaction } from "@mysten/sui/transactions";
 import { isValidSuiAddress } from "@mysten/sui/utils";
 
-import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
+import { saveAgentPolicy } from "@/lib/transactions";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,8 +39,6 @@ import {
   MIST_PER_SUI,
   PERIOD_OPTIONS,
 } from "@/lib/agents";
-
-const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
 
 // Finds the PERIOD_OPTIONS/EXPIRY_OPTIONS entry whose DURATION_MS value
 // matches an on-chain ms value, falling back to the closest option so a cap
@@ -390,97 +387,28 @@ export default function EditAgentPolicyPage() {
     if (!detail || !account || formInvalid) return;
 
     const nextExpiryMs = Date.now() + DURATION_MS[expiry];
-    const tx = new Transaction();
-    const allowedMoveCallTargets = new Set<string>();
-
-    if (nextSpendingLimitPerTx !== detail.spending_limit_per_tx) {
-      const target = `${PACKAGE_ID}::capability::update_spending_limit_per_tx`;
-      tx.moveCall({
-        target,
-        arguments: [tx.object(capId), tx.pure.u64(nextSpendingLimitPerTx)],
-      });
-      allowedMoveCallTargets.add(target);
-    }
-
-    if (nextSpendingLimitPeriod !== detail.spending_limit_period) {
-      const target = `${PACKAGE_ID}::capability::update_spending_limit_period`;
-      tx.moveCall({
-        target,
-        arguments: [tx.object(capId), tx.pure.u64(nextSpendingLimitPeriod)],
-      });
-      allowedMoveCallTargets.add(target);
-    }
-
-    if (nextPeriodLengthMs !== detail.period_length_ms) {
-      const target = `${PACKAGE_ID}::capability::update_period_length_ms`;
-      tx.moveCall({
-        target,
-        arguments: [tx.object(capId), tx.pure.u64(nextPeriodLengthMs)],
-      });
-      allowedMoveCallTargets.add(target);
-    }
-
-    if (nextRiskThreshold !== detail.risk_threshold) {
-      const target = `${PACKAGE_ID}::capability::update_risk_threshold`;
-      tx.moveCall({
-        target,
-        arguments: [tx.object(capId), tx.pure.u8(nextRiskThreshold)],
-      });
-      allowedMoveCallTargets.add(target);
-    }
-
-    if (nextExpiryMs !== detail.expiry_ms) {
-      const target = `${PACKAGE_ID}::capability::update_expiry_ms`;
-      tx.moveCall({
-        target,
-        arguments: [tx.object(capId), tx.pure.u64(nextExpiryMs)],
-      });
-      allowedMoveCallTargets.add(target);
-    }
-
-    const originalTargets = new Set(
-      detail.allowed_targets.map((address) => address.toLowerCase()),
-    );
-    const currentTargets = new Set(
-      targets.map((address) => address.toLowerCase()),
-    );
-
-    for (const address of currentTargets) {
-      if (!originalTargets.has(address)) {
-        const target = `${PACKAGE_ID}::capability::add_allowed_target`;
-        tx.moveCall({
-          target,
-          arguments: [tx.object(capId), tx.pure.address(address)],
-        });
-        allowedMoveCallTargets.add(target);
-      }
-    }
-
-    for (const address of originalTargets) {
-      if (!currentTargets.has(address)) {
-        const target = `${PACKAGE_ID}::capability::remove_allowed_target`;
-        tx.moveCall({
-          target,
-          arguments: [tx.object(capId), tx.pure.address(address)],
-        });
-        allowedMoveCallTargets.add(target);
-      }
-    }
-
-    if (allowedMoveCallTargets.size === 0) {
-      toast.info("No changes to save");
-      return;
-    }
 
     setIsSaving(true);
 
     try {
-      const result = await signAndExecuteSponsoredTransaction({
-        transaction: tx,
+      const result = await saveAgentPolicy({
         sender: account.address,
-        allowedMoveCallTargets: [...allowedMoveCallTargets],
-        allowedAddresses: [account.address],
+        capId,
+        current: detail,
+        next: {
+          spendingLimitPerTxMist: nextSpendingLimitPerTx,
+          spendingLimitPeriodMist: nextSpendingLimitPeriod,
+          periodLengthMs: nextPeriodLengthMs,
+          riskThreshold: nextRiskThreshold,
+          expiryAbsoluteMs: nextExpiryMs,
+          targets,
+        },
       });
+
+      if (result === null) {
+        toast.info("No changes to save");
+        return;
+      }
 
       if (result.$kind !== "Transaction") {
         throw new Error("Sponsored transaction failed");
