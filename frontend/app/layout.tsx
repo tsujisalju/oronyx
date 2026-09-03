@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Flow_Circular, Roboto, Stack_Sans_Headline } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import Header from "@/components/header";
+import LandingHeader from "@/components/landing-header";
 import Providers from "./providers";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -42,7 +42,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <Providers>
-          <Header />
           {children}
           <Toaster />
         </Providers>
