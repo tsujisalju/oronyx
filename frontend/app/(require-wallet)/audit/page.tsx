@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  CircleCheck,
+  CircleQuestionMark,
+  CircleX,
   History,
   ShieldAlert,
   X,
@@ -18,6 +21,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardAction,
 } from "@/components/ui/card";
 import {
   Table,
@@ -39,16 +43,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-type AuditStatus =
-  | "FLAGGED"
-  | "APPROVED"
-  | "REJECTED"
-  | "EXECUTED";
+type AuditStatus = "FLAGGED" | "APPROVED" | "REJECTED" | "EXECUTED";
 
-type AuditAction =
-  | "SWAP"
-  | "STAKE"
-  | "TRANSFER";
+type AuditAction = "SWAP" | "STAKE" | "TRANSFER";
 
 type AuditRecord = {
   id: string;
@@ -68,8 +65,7 @@ const initialRecords: AuditRecord[] = [
     action: "SWAP",
     amount: "0.45 SUI",
     riskScore: 82,
-    reason:
-      "Risk score exceeded the configured threshold.",
+    reason: "Risk score exceeded the configured threshold.",
     status: "FLAGGED",
     timestamp: "2 minutes ago",
   },
@@ -79,8 +75,7 @@ const initialRecords: AuditRecord[] = [
     action: "TRANSFER",
     amount: "0.28 SUI",
     riskScore: 76,
-    reason:
-      "Transfer target requires manual approval.",
+    reason: "Transfer target requires manual approval.",
     status: "FLAGGED",
     timestamp: "8 minutes ago",
   },
@@ -90,8 +85,7 @@ const initialRecords: AuditRecord[] = [
     action: "STAKE",
     amount: "0.30 SUI",
     riskScore: 31,
-    reason:
-      "Action completed within configured policy.",
+    reason: "Action completed within configured policy.",
     status: "EXECUTED",
     timestamp: "18 minutes ago",
   },
@@ -101,32 +95,22 @@ const initialRecords: AuditRecord[] = [
     action: "SWAP",
     amount: "0.20 SUI",
     riskScore: 68,
-    reason:
-      "Previously reviewed by the operator.",
+    reason: "Previously reviewed by the operator.",
     status: "APPROVED",
     timestamp: "27 minutes ago",
   },
 ];
 
 export default function AuditPage() {
-  const [records, setRecords] =
-    useState<AuditRecord[]>(initialRecords);
+  const [records, setRecords] = useState<AuditRecord[]>(initialRecords);
 
   const pendingRecords = useMemo(
-    () =>
-      records.filter(
-        (record) =>
-          record.status === "FLAGGED",
-      ),
+    () => records.filter((record) => record.status === "FLAGGED"),
     [records],
   );
 
   const historyRecords = useMemo(
-    () =>
-      records.filter(
-        (record) =>
-          record.status !== "FLAGGED",
-      ),
+    () => records.filter((record) => record.status !== "FLAGGED"),
     [records],
   );
 
@@ -144,8 +128,7 @@ export default function AuditPage() {
     );
 
     toast.success("Action approved", {
-      description:
-        "The flagged action has been approved for execution.",
+      description: "The flagged action has been approved for execution.",
     });
   }
 
@@ -163,18 +146,13 @@ export default function AuditPage() {
     );
 
     toast.error("Action rejected", {
-      description:
-        "The flagged action has been rejected.",
+      description: "The flagged action has been rejected.",
     });
   }
 
   function getRiskVariant(
     score: number,
-  ):
-    | "default"
-    | "secondary"
-    | "destructive"
-    | "outline" {
+  ): "default" | "secondary" | "destructive" | "outline" {
     if (score >= 75) {
       return "destructive";
     }
@@ -188,11 +166,7 @@ export default function AuditPage() {
 
   function getStatusVariant(
     status: AuditStatus,
-  ):
-    | "default"
-    | "secondary"
-    | "destructive"
-    | "outline" {
+  ): "default" | "secondary" | "destructive" | "outline" {
     switch (status) {
       case "APPROVED":
         return "default";
@@ -211,24 +185,13 @@ export default function AuditPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-6xl px-8 py-10">
-
+      <div className="mx-auto max-w-7xl px-8 py-10">
         {/* HEADER */}
-
         <div>
-          <p className="text-sm text-muted-foreground">
-            Human Oversight
-          </p>
-
-          <h1 className="mt-1 text-3xl font-display
-          ">
-            Audit Trail
-          </h1>
-
+          <h1 className="text-3xl font-display">Audit Trail</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Review high-risk autonomous actions,
-            approve or reject flagged requests,
-            and inspect recent agent activity.
+            Review high-risk autonomous actions, approve or reject flagged
+            requests, and inspect recent agent activity.
           </p>
         </div>
 
@@ -237,49 +200,46 @@ export default function AuditPage() {
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>
-                Pending Review
-              </CardDescription>
+              <CardDescription>Pending Review</CardDescription>
 
               <CardTitle className="text-3xl">
                 {pendingRecords.length}
               </CardTitle>
+              <CardAction>
+                <CircleQuestionMark className="size-5 text-amber-400" />
+              </CardAction>
             </CardHeader>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>
-                Approved
-              </CardDescription>
+              <CardDescription>Approved</CardDescription>
 
               <CardTitle className="text-3xl">
                 {
-                  records.filter(
-                    (record) =>
-                      record.status ===
-                      "APPROVED",
-                  ).length
+                  records.filter((record) => record.status === "APPROVED")
+                    .length
                 }
               </CardTitle>
+              <CardAction>
+                <CircleCheck className="size-5 text-emerald-400" />
+              </CardAction>
             </CardHeader>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>
-                Rejected
-              </CardDescription>
+              <CardDescription>Rejected</CardDescription>
 
               <CardTitle className="text-3xl">
                 {
-                  records.filter(
-                    (record) =>
-                      record.status ===
-                      "REJECTED",
-                  ).length
+                  records.filter((record) => record.status === "REJECTED")
+                    .length
                 }
               </CardTitle>
+              <CardAction>
+                <CircleX className="size-5 text-destructive/70" />
+              </CardAction>
             </CardHeader>
           </Card>
         </div>
@@ -292,13 +252,10 @@ export default function AuditPage() {
               <ShieldAlert className="size-5 text-muted-foreground" />
 
               <div>
-                <CardTitle>
-                  Pending Approvals
-                </CardTitle>
+                <CardTitle>Pending Approvals</CardTitle>
 
                 <CardDescription>
-                  These actions were flagged by
-                  the policy engine and require
+                  These actions were flagged by the policy engine and require
                   human review.
                 </CardDescription>
               </div>
@@ -310,13 +267,10 @@ export default function AuditPage() {
               <div className="rounded-lg border border-dashed p-10 text-center">
                 <Check className="mx-auto size-8 text-muted-foreground" />
 
-                <p className="mt-3 font-medium">
-                  No pending approvals
-                </p>
+                <p className="mt-3 font-medium">No pending approvals</p>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  All flagged actions have been
-                  reviewed.
+                  All flagged actions have been reviewed.
                 </p>
               </div>
             ) : (
@@ -324,203 +278,128 @@ export default function AuditPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>
-                        Agent
-                      </TableHead>
+                      <TableHead>Agent</TableHead>
 
-                      <TableHead>
-                        Action
-                      </TableHead>
+                      <TableHead>Action</TableHead>
 
-                      <TableHead>
-                        Amount
-                      </TableHead>
+                      <TableHead>Amount</TableHead>
 
-                      <TableHead>
-                        Risk
-                      </TableHead>
+                      <TableHead>Risk</TableHead>
 
-                      <TableHead>
-                        Reason
-                      </TableHead>
+                      <TableHead>Reason</TableHead>
 
-                      <TableHead>
-                        Time
-                      </TableHead>
+                      <TableHead>Time</TableHead>
 
-                      <TableHead className="text-right">
-                        Decision
-                      </TableHead>
+                      <TableHead className="text-right">Decision</TableHead>
                     </TableRow>
                   </TableHeader>
 
                   <TableBody>
-                    {pendingRecords.map(
-                      (record) => (
-                        <TableRow
-                          key={record.id}
-                        >
-                          <TableCell className="font-medium">
-                            {
-                              record.agentName
-                            }
-                          </TableCell>
+                    {pendingRecords.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell className="font-medium">
+                          {record.agentName}
+                        </TableCell>
 
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {
-                                record.action
-                              }
-                            </Badge>
-                          </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{record.action}</Badge>
+                        </TableCell>
 
-                          <TableCell>
-                            {record.amount}
-                          </TableCell>
+                        <TableCell>{record.amount}</TableCell>
 
-                          <TableCell>
-                            <Badge
-                              variant={getRiskVariant(
-                                record.riskScore,
-                              )}
-                            >
-                              {
-                                record.riskScore
-                              }
-                              /100
-                            </Badge>
-                          </TableCell>
+                        <TableCell>
+                          <Badge variant={getRiskVariant(record.riskScore)}>
+                            {record.riskScore}
+                            /100
+                          </Badge>
+                        </TableCell>
 
-                          <TableCell className="max-w-xs">
-                            <div className="flex items-start gap-2">
-                              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <TableCell className="max-w-xs">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 
-                              <span className="text-sm text-muted-foreground">
-                                {
-                                  record.reason
-                                }
-                              </span>
-                            </div>
-                          </TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {record.reason}
+                            </span>
+                          </div>
+                        </TableCell>
 
-                          <TableCell className="text-muted-foreground">
-                            {
-                              record.timestamp
-                            }
-                          </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {record.timestamp}
+                        </TableCell>
 
-                          <TableCell>
-                            <div className="flex justify-end gap-2">
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            {/* REJECT */}
 
-                              {/* REJECT */}
+                            <AlertDialog>
+                              <AlertDialogTrigger
+                                render={<Button variant="outline" size="sm" />}
+                              >
+                                <X className="size-4" />
+                                Reject
+                              </AlertDialogTrigger>
 
-                              <AlertDialog>
-                                <AlertDialogTrigger
-                                  render={
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                    />
-                                  }
-                                >
-                                  <X className="size-4" />
-                                  Reject
-                                </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Reject action?
+                                  </AlertDialogTitle>
 
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Reject action?
-                                    </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will reject the {record.action} request
+                                    from {record.agentName}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
 
-                                    <AlertDialogDescription>
-                                      This will
-                                      reject the{" "}
-                                      {
-                                        record.action
-                                      }{" "}
-                                      request from{" "}
-                                      {
-                                        record.agentName
-                                      }
-                                      .
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
 
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
+                                  <AlertDialogAction
+                                    variant="destructive"
+                                    onClick={() => rejectRecord(record.id)}
+                                  >
+                                    Reject Action
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
 
-                                    <AlertDialogAction
-                                      variant="destructive"
-                                      onClick={() =>
-                                        rejectRecord(
-                                          record.id,
-                                        )
-                                      }
-                                    >
-                                      Reject Action
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                            {/* APPROVE */}
 
-                              {/* APPROVE */}
+                            <AlertDialog>
+                              <AlertDialogTrigger render={<Button size="sm" />}>
+                                <Check className="size-4" />
+                                Approve
+                              </AlertDialogTrigger>
 
-                              <AlertDialog>
-                                <AlertDialogTrigger
-                                  render={
-                                    <Button
-                                      size="sm"
-                                    />
-                                  }
-                                >
-                                  <Check className="size-4" />
-                                  Approve
-                                </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Approve action?
+                                  </AlertDialogTitle>
 
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Approve action?
-                                    </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Approve this {record.action} request for{" "}
+                                    {record.amount}?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
 
-                                    <AlertDialogDescription>
-                                      Approve this{" "}
-                                      {
-                                        record.action
-                                      }{" "}
-                                      request for{" "}
-                                      {
-                                        record.amount
-                                      }
-                                      ?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
 
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        approveRecord(
-                                          record.id,
-                                        )
-                                      }
-                                    >
-                                      Approve Action
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ),
-                    )}
+                                  <AlertDialogAction
+                                    onClick={() => approveRecord(record.id)}
+                                  >
+                                    Approve Action
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -536,13 +415,10 @@ export default function AuditPage() {
               <History className="size-5 text-muted-foreground" />
 
               <div>
-                <CardTitle>
-                  Recent Activity
-                </CardTitle>
+                <CardTitle>Recent Activity</CardTitle>
 
                 <CardDescription>
-                  Previously executed and reviewed
-                  autonomous actions.
+                  Previously executed and reviewed autonomous actions.
                 </CardDescription>
               </div>
             </div>
@@ -553,89 +429,51 @@ export default function AuditPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>
-                      Agent
-                    </TableHead>
+                    <TableHead>Agent</TableHead>
 
-                    <TableHead>
-                      Action
-                    </TableHead>
+                    <TableHead>Action</TableHead>
 
-                    <TableHead>
-                      Amount
-                    </TableHead>
+                    <TableHead>Amount</TableHead>
 
-                    <TableHead>
-                      Risk
-                    </TableHead>
+                    <TableHead>Risk</TableHead>
 
-                    <TableHead>
-                      Status
-                    </TableHead>
+                    <TableHead>Status</TableHead>
 
-                    <TableHead>
-                      Time
-                    </TableHead>
+                    <TableHead>Time</TableHead>
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {historyRecords.map(
-                    (record) => (
-                      <TableRow
-                        key={record.id}
-                      >
-                        <TableCell className="font-medium">
-                          {
-                            record.agentName
-                          }
-                        </TableCell>
+                  {historyRecords.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">
+                        {record.agentName}
+                      </TableCell>
 
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {
-                              record.action
-                            }
-                          </Badge>
-                        </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{record.action}</Badge>
+                      </TableCell>
 
-                        <TableCell>
-                          {record.amount}
-                        </TableCell>
+                      <TableCell>{record.amount}</TableCell>
 
-                        <TableCell>
-                          <Badge
-                            variant={getRiskVariant(
-                              record.riskScore,
-                            )}
-                          >
-                            {
-                              record.riskScore
-                            }
-                            /100
-                          </Badge>
-                        </TableCell>
+                      <TableCell>
+                        <Badge variant={getRiskVariant(record.riskScore)}>
+                          {record.riskScore}
+                          /100
+                        </Badge>
+                      </TableCell>
 
-                        <TableCell>
-                          <Badge
-                            variant={getStatusVariant(
-                              record.status,
-                            )}
-                          >
-                            {
-                              record.status
-                            }
-                          </Badge>
-                        </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(record.status)}>
+                          {record.status}
+                        </Badge>
+                      </TableCell>
 
-                        <TableCell className="text-muted-foreground">
-                          {
-                            record.timestamp
-                          }
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
+                      <TableCell className="text-muted-foreground">
+                        {record.timestamp}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

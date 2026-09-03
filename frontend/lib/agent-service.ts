@@ -6,6 +6,7 @@ export interface AgentSummary {
   owner: string;
   operator: string;
   active: boolean;
+  name: string | null;
 }
 
 export async function listAgents(owner: string): Promise<AgentSummary[]> {
@@ -15,6 +16,36 @@ export async function listAgents(owner: string): Promise<AgentSummary[]> {
   if (!response.ok) {
     throw new Error(`Failed to list agents: ${await response.text()}`);
   }
+  return response.json();
+}
+
+export async function saveAgentMetadata({
+  capId,
+  owner,
+  name,
+}: {
+  capId: string;
+  owner: string;
+  name: string;
+}) {
+  const response = await fetch(`${AGENT_SERVICE_URL}/agents/metadata`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      cap_id: capId,
+      owner,
+      name,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to save agent metadata: ${await response.text()}`,
+    );
+  }
+
   return response.json();
 }
 
@@ -35,6 +66,7 @@ export interface AgentDetail {
   risk_threshold: number;
   expiry_ms: number;
   vault_balance: number;
+  name: string | null;
 }
 
 export async function getAgent(capId: string): Promise<AgentDetail | null> {

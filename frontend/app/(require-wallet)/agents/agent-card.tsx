@@ -12,9 +12,12 @@ import { Agent } from "@/lib/agents";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import EditableAgentName from "@/components/editable-agent-name";
 
-export default function AgentCard({ agent }: { agent: Agent }) {
+export default function AgentCard({ agent: initialAgent }: { agent: Agent }) {
   const router = useRouter();
+  const [agent, setAgent] = useState(initialAgent);
   const handleOnClick = () => {
     router.push(`agents/${agent.id}`);
   };
@@ -28,7 +31,25 @@ export default function AgentCard({ agent }: { agent: Agent }) {
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div className="grid gap-1">
           <CardDescription>Autonomous Agent</CardDescription>
-          <CardTitle className="text-xl">{agent.name}</CardTitle>
+          <CardTitle className="text-xl">
+            <EditableAgentName
+              name={agent.name}
+              capId={agent.capId}
+              owner={agent.owner}
+              onSaved={(newName) =>
+                setAgent((current) => ({
+                  ...current,
+                  name: newName,
+                  hasName: true,
+                }))
+              }
+            />
+          </CardTitle>
+          {agent.hasName && agent.capId && (
+  <p className="font-mono text-xs text-muted-foreground">
+    {agent.capId.slice(0, 8)}…{agent.capId.slice(-6)}
+  </p>
+)}
         </div>
 
         <Badge

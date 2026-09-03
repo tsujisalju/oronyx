@@ -7,6 +7,13 @@ class AgentSummary(BaseModel):
     owner: str
     operator: str
     active: bool
+    name: str | None = None
+
+
+class AgentMetadataCreate(BaseModel):
+    cap_id: str
+    owner: str
+    name: str
 
 
 class AgentDetail(BaseModel):
@@ -26,3 +33,4 @@ class AgentDetail(BaseModel):
     risk_threshold: int
     expiry_ms: int
     vault_balance: int
+    name: str | None = None

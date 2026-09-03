@@ -2,9 +2,9 @@ import time
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
-from app.models.agent import AgentDetail, AgentSummary
+from app.models.agent import AgentDetail, AgentMetadataCreate, AgentSummary
 from app.models.policy import ActionType, AgentPolicy
-from app.services import sui_events, sui_objects
+from app.services import agent_metadata, sui_events, sui_objects
 from app.services.llm import parse_policy_with_llm
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -14,24 +14,6 @@ router = APIRouter()
 
 class ParsePolicyRequest(BaseModel):
     text: str
-
-
-@router.post("/parse-policy", response_model=AgentPolicy)
-def parse_policy(request: ParsePolicyRequest):
-    # Temporary parser.
-    # The LLM will replace this later.
-    return AgentPolicy(
-        spending_limit_per_tx=2_000_000_000,
-        spending_limit_period=10_000_000_000,
-        period_length_ms=3_600_000,
-        allowed_actions=[
-            ActionType.TRANSFER,
-            ActionType.MOCK_SWAP,
-        ],
-        allowed_targets=[],
-        risk_threshold=60,
-        expiry_ms=0,
-    )
 
 
 ACTION_MAP = {
@@ -163,9 +145,33 @@ async def list_agents(
             owner=cap.owner,
             operator=cap.operator,
             active=cap.cap_id not in deactivated_ids,
+            name=agent_metadata.get_agent_name(cap.cap_id),
         )
         for cap in created
     ]
+
+
+@router.post("/metadata")
+def save_metadata(metadata: AgentMetadataCreate):
+    name = metadata.name.strip()
+
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Agent name cannot be empty",
+        )
+
+    agent_metadata.save_agent_metadata(
+        cap_id=metadata.cap_id,
+        owner=metadata.owner,
+        name=name,
+    )
+
+    return {
+        "status": "ok",
+        "cap_id": metadata.cap_id,
+        "name": name,
+    }
 
 
 @router.get("/{cap_id}", response_model=AgentDetail)
@@ -173,13 +179,8 @@ async def get_agent(cap_id: str):
     detail = await sui_objects.get_agent_detail(cap_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Agent not found")
+    detail.name = agent_metadata.get_agent_name(cap_id)
     return detail
-
-
-@router.post("/parse-policy")
-def parse_policy():
-    # will take natural-language rules -> structured AgentCap fields
-    ...
 
 
 @router.post("/decide")
