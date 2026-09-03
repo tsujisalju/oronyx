@@ -48,8 +48,12 @@ async def _query_events_by_type(event_type: str, payload_model: type[T]) -> list
     return payloads
 
 
+async def get_all_created_caps() -> list[CapCreatedPayload]:
+    return await _query_events_by_type(CAP_CREATED_EVENT_TYPE, CapCreatedPayload)
+
+
 async def get_created_caps_for_owner(owner: str) -> list[CapCreatedPayload]:
-    events = await _query_events_by_type(CAP_CREATED_EVENT_TYPE, CapCreatedPayload)
+    events = await get_all_created_caps()
     return [event for event in events if event.owner == owner]
 
 

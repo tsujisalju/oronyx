@@ -112,6 +112,107 @@ Rules:
 """
 
 
+DECISION_TOOL = {
+    "name": "make_agent_decision",
+    "description": (
+        "Decide whether an autonomous Oronyx agent should act on a "
+        "triggering market/validator event, given its policy and recent "
+        "activity. Never propose a target outside the agent's allowed "
+        "targets, or an amount outside its spending limits."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "decision": {
+                "type": "string",
+                "enum": ["act", "no_action"],
+                "description": "Whether the agent should act on this trigger.",
+            },
+            "reasoning": {
+                "type": "string",
+                "description": (
+                    "Why this decision was made. Required even for "
+                    "no_action — this is the only audit trail for skipped "
+                    "opportunities."
+                ),
+            },
+            "amount_mist": {
+                "type": ["string", "null"],
+                "description": (
+                    "Amount to act with, in MIST, as a decimal string "
+                    "(never a number, to avoid precision loss). Required "
+                    "when decision is 'act', null otherwise."
+                ),
+            },
+            "target": {
+                "type": ["string", "null"],
+                "description": (
+                    "The target address/pool/validator to act against — "
+                    "must be one of the candidate's allowed targets. "
+                    "Required when decision is 'act', null otherwise."
+                ),
+            },
+            "risk_score": {
+                "type": ["integer", "null"],
+                "description": (
+                    "Assessed risk of this action, 0-100. Required when "
+                    "decision is 'act', null otherwise."
+                ),
+            },
+        },
+        "required": ["decision", "reasoning", "amount_mist", "target", "risk_score"],
+    },
+}
+
+
+DECISION_SYSTEM_PROMPT = """
+You are the decision engine for an autonomous Oronyx agent.
+
+You are given: the triggering event (a price move or validator/APY
+change), the agent's policy (spending limits, allowed targets, risk
+threshold), its current vault balance and period spending, and its
+recent activity history.
+
+Rules:
+
+1. Only propose a target that is already in the agent's allowed targets —
+   never invent or suggest a target outside that list.
+2. Never propose an amount that would exceed spending_limit_per_tx, or
+   that would push period_spent over spending_limit_period.
+3. Always give a reasoning string, even for no_action — this is the only
+   record of why an opportunity was skipped.
+4. If recent activity shows the agent already acted on a very similar
+   trigger recently, lean toward no_action to avoid churn, and say so in
+   reasoning.
+5. Estimate risk_score (0-100) for any proposed action; if it exceeds the
+   agent's risk_threshold, the action will be queued for manual approval
+   on-chain rather than executed immediately — still fine to propose if
+   it's genuinely warranted, but say so in reasoning.
+"""
+
+
+def decide_agent_action(context: dict[str, Any]) -> dict[str, Any]:
+    """Calls the Anthropic API with make_agent_decision forced, following
+    parse_policy_with_llm's exact tool-use pattern.
+    """
+    client = _get_client()
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        system=DECISION_SYSTEM_PROMPT,
+        tools=[DECISION_TOOL],
+        tool_choice={"type": "tool", "name": "make_agent_decision"},
+        messages=[{"role": "user", "content": str(context)}],
+    )
+
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "make_agent_decision":
+            return block.input
+
+    raise RuntimeError("LLM response did not include the expected tool_use block")
+
+
 def _get_client() -> anthropic.Anthropic:
     api_key = os.getenv("ANTHROPIC_API_KEY")
 

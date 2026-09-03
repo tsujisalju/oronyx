@@ -1,0 +1,147 @@
+"""Hourly global price-trigger check for the mock-swap decision path.
+
+Fires get_candidate_agents(MOCK_SWAP) + a per-agent LLM decision only
+when the DeepBook price signal has moved past SWAP_TRIGGER_THRESHOLD_PCT
+since last check — cheap no-op otherwise.
+"""
+
+import logging
+from decimal import Decimal
+
+from app.config import settings
+from app.models.policy import ActionType, MockSwapDecision
+from app.services import activity_log, agent_index, executor_client, market_data, sui_objects
+from app.services.llm import decide_agent_action
+
+logger = logging.getLogger(__name__)
+
+SWAP_TRIGGER_THRESHOLD_PCT = Decimal("2.0")
+
+
+async def check_swap_trigger(force: bool = False) -> None:
+    """
+    :param force: Skip the price-move threshold gate and run the candidate
+        decision pass regardless — for manual testing via the /agents/dev
+        endpoints, not used by the scheduled job.
+    """
+    pool_id = settings.deepbook_price_pool_id
+    if not pool_id:
+        logger.info("swap_trigger: DEEPBOOK_PRICE_POOL_ID not configured, skipping")
+        return
+
+    try:
+        current_price = await market_data.get_pool_price(pool_id)
+    except Exception:
+        logger.exception("swap_trigger: price read failed for pool %s, skipping this cycle", pool_id)
+        return
+
+    last_price = market_data.get_last_seen_price(pool_id)
+    market_data.set_last_seen_price(pool_id, current_price)
+
+    if not force:
+        if last_price is None or last_price == 0:
+            return
+
+        pct_change = abs((current_price - last_price) / last_price) * 100
+        if pct_change < SWAP_TRIGGER_THRESHOLD_PCT:
+            return
+    else:
+        pct_change = (
+            abs((current_price - last_price) / last_price) * 100
+            if last_price
+            else Decimal("0")
+        )
+        last_price = last_price if last_price is not None else current_price
+
+    candidates = agent_index.get_candidate_agents(ActionType.MOCK_SWAP)
+    for candidate in candidates:
+        await _decide_for_candidate(candidate, current_price, last_price, pct_change)
+
+
+async def _decide_for_candidate(candidate, current_price: Decimal, last_price: Decimal, pct_change: Decimal) -> None:
+    detail = await sui_objects.get_agent_detail(candidate.cap_id)
+    if detail is None or not detail.active:
+        return
+
+    if not detail.allowed_targets:
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.MOCK_SWAP,
+            decision="no_action",
+            reasoning="Agent has no allowed targets for mock_swap.",
+        )
+        return
+
+    recent = activity_log.get_recent_activity(candidate.cap_id, limit=10)
+
+    context = {
+        "trigger": {
+            "type": "price_move",
+            "pool_id": settings.deepbook_price_pool_id,
+            "last_price": str(last_price),
+            "current_price": str(current_price),
+            "pct_change": str(pct_change),
+        },
+        "agent": {
+            "cap_id": detail.cap_id,
+            "vault_balance": detail.vault_balance,
+            "spending_limit_per_tx": detail.spending_limit_per_tx,
+            "spending_limit_period": detail.spending_limit_period,
+            "period_spent": detail.period_spent,
+            "allowed_targets": detail.allowed_targets,
+            "risk_threshold": detail.risk_threshold,
+        },
+        "recent_activity": [
+            {
+                "decision": row["decision"],
+                "reasoning": row["reasoning"],
+                "created_at": row["created_at"],
+            }
+            for row in recent
+        ],
+    }
+
+    result = decide_agent_action(context)
+
+    if result["decision"] != "act":
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.MOCK_SWAP,
+            decision="no_action",
+            reasoning=result["reasoning"],
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
+
+    target = result["target"]
+    if target not in detail.allowed_targets:
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.MOCK_SWAP,
+            decision="no_action",
+            reasoning=f"LLM proposed disallowed target {target}, skipped.",
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
+
+    decision = MockSwapDecision(
+        type="mock_swap",
+        cap_id=detail.cap_id,
+        vault_id=detail.vault_id,
+        amount_mist=str(result["amount_mist"]),
+        risk_score=int(result["risk_score"]),
+        mock_pool_id=target,
+    )
+
+    await executor_client.submit_decision(decision)
+
+    activity_log.log_decision(
+        cap_id=candidate.cap_id,
+        action_type=ActionType.MOCK_SWAP,
+        decision="act",
+        reasoning=result["reasoning"],
+        target=target,
+        amount_mist=decision.amount_mist,
+        risk_score=decision.risk_score,
+    )
+    agent_index.mark_decision(candidate.cap_id)
