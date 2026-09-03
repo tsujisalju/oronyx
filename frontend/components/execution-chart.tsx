@@ -1,20 +1,19 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 interface Execution {
   time: string;
@@ -26,73 +25,75 @@ interface ExecutionChartProps {
 }
 
 const chartConfig = {
-  executions: {
-    label: "Executions",
-    color: "var(--chart-1)",
+  approved: {
+    label: "Approved",
+    color: "var(--color-emerald-500)",
+  },
+  flagged: {
+    label: "Flagged",
+    color: "var(--color-amber-500)",
   },
 } satisfies ChartConfig;
 
-export default function ExecutionChart({
-  executions,
-}: ExecutionChartProps) {
+export default function ExecutionChart({ executions }: ExecutionChartProps) {
   const groupedData = executions.reduce(
-  (acc, execution) => {
-    const existing = acc.find(
-      (item) => item.time === execution.time
-    );
+    (acc, execution) => {
+      let bucket = acc.find((item) => item.time === execution.time);
 
-    if (existing) {
-      existing.executions += 1;
-    } else {
-      acc.push({
-        time: execution.time,
-        executions: 1,
-      });
-    }
+      if (!bucket) {
+        bucket = { time: execution.time, approved: 0, flagged: 0 };
+        acc.push(bucket);
+      }
 
-    return acc;
-  },
-  [] as { time: string; executions: number }[]
-);
+      if (execution.status === "APPROVED") bucket.approved += 1;
+      if (execution.status === "FLAGGED") bucket.flagged += 1;
+
+      return acc;
+    },
+    [] as { time: string; approved: number; flagged: number }[],
+  );
 
   return (
-    <Card>
-
-      <CardHeader>
-        <CardTitle className="text-xl">Execution Activity</CardTitle>
-        <CardDescription>Agent executions over time</CardDescription>
+    <Card className="h-full">
+      <CardHeader className="gap-1">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-xl">Execution Activity</CardTitle>
+            <CardDescription className="mt-1">
+              Policy outcomes across autonomous agent actions
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-emerald-500" /> Approved
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-amber-500" /> Flagged
+            </span>
+          </div>
+        </div>
       </CardHeader>
 
-      <CardContent className="h-80">
+      <CardContent className="h-88">
         <ChartContainer config={chartConfig} className="h-full w-full">
-          <LineChart data={groupedData}>
-
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="var(--border)"
-            />
-
-            <XAxis
-              dataKey="time"
-              stroke="var(--muted-foreground)"
-            />
-
-            <YAxis
-              allowDecimals={false}
-              stroke="var(--muted-foreground)"
-            />
-
+          <BarChart data={groupedData} barCategoryGap="28%">
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="time" tickLine={false} axisLine={false} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
             <ChartTooltip content={<ChartTooltipContent />} />
-
-            <Line
-              type="monotone"
-              dataKey="executions"
-              stroke="var(--color-executions)"
-              strokeWidth={2}
-              dot={{ r: 4 }}
+            <Bar
+              dataKey="approved"
+              stackId="outcome"
+              fill="var(--color-approved)"
+              radius={[0, 0, 3, 3]}
             />
-
-          </LineChart>
+            <Bar
+              dataKey="flagged"
+              stackId="outcome"
+              fill="var(--color-flagged)"
+              radius={[3, 3, 0, 0]}
+            />
+          </BarChart>
         </ChartContainer>
       </CardContent>
     </Card>

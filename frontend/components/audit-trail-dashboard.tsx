@@ -7,7 +7,6 @@ import ExecutionTable from "./execution-table";
 import ExecutionChart from "./execution-chart";
 import RiskChart from "./risk-chart";
 import AgentPerformance from "./agent-performance";
-import { Label } from "./ui/label";
 import {
   Select,
   SelectContent,
@@ -160,76 +159,91 @@ export default function AuditTrailDashboard() {
   // DASHBOARD
   // --------------------------------
 
+  const riskBand = averageRisk < 30 ? "Low" : averageRisk < 60 ? "Medium" : "High";
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
-      <div className="mx-auto max-w-7xl px-8 py-10">
-        {/* HEADER */}
-
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-3xl font-display">Dashboard</h1>
-
             <p className="mt-2 text-zinc-400">
               Autonomous agent control center
             </p>
           </div>
 
-          {/* AGENT FILTER */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-400">Period</p>
+              <div className="flex rounded-xl border border-border/70 bg-card p-1">
+                <button className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground">24H</button>
+                {['7D', '30D', 'ALL'].map((period) => (
+                  <button
+                    key={period}
+                    disabled
+                    title="Available when historical execution data is connected"
+                    className="cursor-not-allowed rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground opacity-45"
+                  >
+                    {period}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div>
-            <Label className="mb-2 text-zinc-400">Agent</Label>
-
-            <Select
-              value={selectedAgent}
-              onValueChange={(value) => {
-                if (typeof value === "string") {
-                  setSelectedAgent(value);
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectGroup>
-                  {agents.map((agent) => (
-                    <SelectItem key={agent} value={agent}>
-                      {agent}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            <div className="min-w-48">
+              <p className="mb-2 text-xs font-medium text-zinc-400">Agent</p>
+              <Select
+                value={selectedAgent}
+                onValueChange={(value) => {
+                  if (typeof value === "string") setSelectedAgent(value);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent} value={agent}>
+                        {agent}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        {/* KPI CARDS */}
-
-        <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-4">
-          <StatCard title="Active Agents" value={2} />
-
-          <StatCard title="Executions" value={totalExecutions} />
-
-          <StatCard title="Approval Rate" value={approvalRate} />
-
-          <StatCard title="Average Risk" value={averageRisk} />
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Active Agents"
+            value={selectedAgent === "All Agents" ? agents.length - 1 : 1}
+            description={selectedAgent === "All Agents" ? `${agents.length - 1} agents reporting activity` : "Filtered agent"}
+          />
+          <StatCard
+            title="Executions"
+            value={totalExecutions}
+            description={`${approvedExecutions} approved · ${flaggedExecutions} flagged`}
+          />
+          <StatCard
+            title="Approval Rate"
+            value={`${approvalRate}%`}
+            description={`${approvedExecutions} of ${totalExecutions} actions approved`}
+          />
+          <StatCard
+            title="Average Risk"
+            value={averageRisk}
+            description={`${riskBand} risk profile`}
+          />
         </div>
 
-        {/* CHARTS */}
-
-        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <ExecutionChart executions={filteredExecutions} />
-
           <RiskChart executions={filteredExecutions} />
         </div>
 
-        {/* AGENT PERFORMANCE */}
-
-        <AgentPerformance executions={executions} />
-
-        {/* EXECUTION TABLE */}
-
+        <AgentPerformance executions={filteredExecutions} />
         <ExecutionTable executions={filteredExecutions} />
       </div>
     </main>
