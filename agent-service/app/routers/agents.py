@@ -49,7 +49,7 @@ def sui_to_mist(amount_sui: float) -> int:
     if amount < 0:
         raise ValueError("SUI amount cannot be negative")
 
-    mist = amount * Decimal("1000000000")
+    mist = amount * Decimal(1000000000)
 
     if mist != mist.to_integral_value():
         raise ValueError("SUI amount has more precision than MIST supports")
@@ -68,7 +68,7 @@ def build_agent_policy(llm_policy: dict[str, Any]) -> AgentPolicy:
     spending_limit_period = sui_to_mist(llm_policy["spending_limit_period_sui"])
 
     period_length_ms = int(
-        Decimal(str(llm_policy["period_length_hours"])) * Decimal("3600000")
+        Decimal(str(llm_policy["period_length_hours"])) * Decimal(3600000)
     )
 
     allowed_actions = []
@@ -210,7 +210,9 @@ async def dev_check_swap_trigger(
     force: Annotated[bool, Query()] = False,
     simulate_pct_change: Annotated[
         float | None,
-        Query(description="Only used with force=true. Reports this synthetic price move to the LLM instead of the real one."),
+        Query(
+            description="Only used with force=true. Reports this synthetic price move to the LLM instead of the real one."
+        ),
     ] = None,
 ):
     """Manually run the swap trigger check, for testing outside the
@@ -225,7 +227,9 @@ async def dev_check_stake_trigger(
     force: Annotated[bool, Query()] = False,
     simulate_commission_change_bps: Annotated[
         int | None,
-        Query(description="Only used with force=true. Synthesizes a commission-change opportunity on each candidate's own allowed target."),
+        Query(
+            description="Only used with force=true. Synthesizes a commission-change opportunity on each candidate's own allowed target."
+        ),
     ] = None,
 ):
     """Manually run the stake trigger check, for testing outside the
