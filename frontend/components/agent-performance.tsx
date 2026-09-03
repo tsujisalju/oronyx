@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -25,6 +26,12 @@ interface Execution {
 
 interface AgentPerformanceProps {
   executions: Execution[];
+}
+
+function riskLabel(risk: number) {
+  if (risk < 30) return { label: "Low", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" };
+  if (risk < 60) return { label: "Medium", className: "border-amber-500/30 bg-amber-500/10 text-amber-400" };
+  return { label: "High", className: "border-red-500/30 bg-red-500/10 text-red-400" };
 }
 
 export default function AgentPerformance({ executions }: AgentPerformanceProps) {
@@ -55,17 +62,11 @@ export default function AgentPerformance({ executions }: AgentPerformanceProps) 
       0,
     );
 
-    return {
-      agent,
-      totalExecutions,
-      approvalRate,
-      averageRisk,
-      totalVolume,
-    };
+    return { agent, totalExecutions, approvalRate, averageRisk, totalVolume };
   });
 
   return (
-    <Card className="mt-8">
+    <Card className="mt-6">
       <CardHeader>
         <CardTitle className="text-xl">Agent Performance</CardTitle>
         <CardDescription>
@@ -77,22 +78,30 @@ export default function AgentPerformance({ executions }: AgentPerformanceProps) 
           <TableHeader>
             <TableRow>
               <TableHead>Agent</TableHead>
-              <TableHead>Executions</TableHead>
-              <TableHead>Approval Rate</TableHead>
-              <TableHead>Avg Risk</TableHead>
-              <TableHead>Volume</TableHead>
+              <TableHead className="text-right">Executions</TableHead>
+              <TableHead className="text-right">Approval Rate</TableHead>
+              <TableHead className="text-right">Avg Risk</TableHead>
+              <TableHead className="text-right">Volume</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {performance.map((agent) => (
-              <TableRow key={agent.agent}>
-                <TableCell className="font-medium">{agent.agent}</TableCell>
-                <TableCell>{agent.totalExecutions}</TableCell>
-                <TableCell>{agent.approvalRate}%</TableCell>
-                <TableCell>{agent.averageRisk}</TableCell>
-                <TableCell>{agent.totalVolume.toLocaleString()} SUI</TableCell>
-              </TableRow>
-            ))}
+            {performance.map((agent) => {
+              const risk = riskLabel(agent.averageRisk);
+              return (
+                <TableRow key={agent.agent}>
+                  <TableCell className="font-medium">{agent.agent}</TableCell>
+                  <TableCell className="text-right tabular-nums">{agent.totalExecutions}</TableCell>
+                  <TableCell className="text-right tabular-nums">{agent.approvalRate}%</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="tabular-nums">{agent.averageRisk}</span>
+                      <Badge variant="outline" className={risk.className}>{risk.label}</Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{agent.totalVolume.toLocaleString()} SUI</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>
