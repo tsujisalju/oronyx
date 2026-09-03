@@ -13,7 +13,7 @@ EXECUTOR_URL = os.getenv(
 
 async def execute_agent_action(
     decision: AgentActionDecision,
-) -> dict:
+) -> dict[str, object]:
     """
     Send an agent decision to the TypeScript executor.
 

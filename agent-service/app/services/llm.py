@@ -2,15 +2,16 @@ import os
 from typing import Any
 
 import anthropic
+from anthropic.types import ToolParam
 from dotenv import load_dotenv
 
-load_dotenv()
+_ = load_dotenv()
 
 
 MODEL = os.getenv("ORONYX_LLM_MODEL", "claude-haiku-4-5-20251001")
 
 
-POLICY_TOOL = {
+POLICY_TOOL: ToolParam = {
     "name": "parse_agent_policy",
     "description": (
         "Extract a user's natural-language Oronyx agent policy into "
@@ -112,7 +113,7 @@ Rules:
 """
 
 
-DECISION_TOOL = {
+DECISION_TOOL: ToolParam = {
     "name": "make_agent_decision",
     "description": (
         "Decide whether an autonomous Oronyx agent should act on a "

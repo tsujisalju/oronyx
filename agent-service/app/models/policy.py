@@ -1,7 +1,7 @@
 from enum import IntEnum
-from typing import Literal, Union
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ActionType(IntEnum):
@@ -24,13 +24,12 @@ class AgentPolicy(BaseModel):
 
 
 class BaseDecision(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     cap_id: str = Field(alias="capId")
     vault_id: str = Field(alias="vaultId")
     amount_mist: str = Field(alias="amountMist")
     risk_score: int = Field(alias="riskScore", ge=0, le=100)
-
-    class Config:
-        populate_by_name = True
 
 
 class TransferDecision(BaseDecision):
@@ -56,9 +55,6 @@ class CetusSwapDecision(BaseDecision):
     slippage_percent: float = Field(alias="slippagePercent")
 
 
-AgentActionDecision = Union[
-    TransferDecision,
-    StakeDecision,
-    MockSwapDecision,
-    CetusSwapDecision,
-]
+AgentActionDecision = (
+    TransferDecision | StakeDecision | MockSwapDecision | CetusSwapDecision
+)

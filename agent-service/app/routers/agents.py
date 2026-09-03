@@ -1,6 +1,6 @@
 import time
 from decimal import Decimal, InvalidOperation
-from typing import Annotated
+from typing import Annotated, Any
 
 from app.models.agent import AgentDetail, AgentMetadataCreate, AgentSummary
 from app.models.agent_index import AgentCandidate
@@ -57,7 +57,7 @@ def sui_to_mist(amount_sui: float) -> int:
     return int(mist)
 
 
-def build_agent_policy(llm_policy: dict) -> AgentPolicy:
+def build_agent_policy(llm_policy: dict[str, Any]) -> AgentPolicy:
     """
     Convert the LLM's human-readable policy into the
     exact fields required by AgentPolicy.

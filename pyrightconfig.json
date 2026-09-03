@@ -2,5 +2,16 @@
   "venvPath": "./agent-service",
   "venv": ".venv",
   "include": ["agent-service"],
-  "extraPaths": ["./agent-service"]
+  "extraPaths": ["./agent-service"],
+  "reportAny": false,
+  "reportExplicitAny": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownArgumentType": false,
+  "reportMissingTypeStubs": false,
+  "reportMissingParameterType": false,
+  "reportUnannotatedClassAttribute": false,
+  "reportUnusedCallResult": false,
+  "reportDeprecated": false
 }

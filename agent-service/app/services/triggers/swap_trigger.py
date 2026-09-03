@@ -10,7 +10,13 @@ from decimal import Decimal
 
 from app.config import settings
 from app.models.policy import ActionType, MockSwapDecision
-from app.services import activity_log, agent_index, executor_client, market_data, sui_objects
+from app.services import (
+    activity_log,
+    agent_index,
+    executor_client,
+    market_data,
+    sui_objects,
+)
 from app.services.llm import decide_agent_action
 
 logger = logging.getLogger(__name__)
@@ -18,7 +24,9 @@ logger = logging.getLogger(__name__)
 SWAP_TRIGGER_THRESHOLD_PCT = Decimal("2.0")
 
 
-async def check_swap_trigger(force: bool = False, simulate_pct_change: float | None = None) -> None:
+async def check_swap_trigger(
+    force: bool = False, simulate_pct_change: float | None = None
+) -> None:
     """
     :param force: Skip the price-move threshold gate and run the candidate
         decision pass regardless — for manual testing via the /agents/dev
@@ -38,7 +46,9 @@ async def check_swap_trigger(force: bool = False, simulate_pct_change: float | N
     try:
         current_price = await market_data.get_pool_price(pool_id)
     except Exception:
-        logger.exception("swap_trigger: price read failed for pool %s, skipping this cycle", pool_id)
+        logger.exception(
+            "swap_trigger: price read failed for pool %s, skipping this cycle", pool_id
+        )
         return
 
     last_price = market_data.get_last_seen_price(pool_id)
@@ -63,15 +73,20 @@ async def check_swap_trigger(force: bool = False, simulate_pct_change: float | N
             pct_change = (
                 abs((current_price - last_price) / last_price) * 100
                 if last_price
-                else Decimal("0")
+                else Decimal(0)
             )
 
     candidates = agent_index.get_candidate_agents(ActionType.MOCK_SWAP)
     for candidate in candidates:
         try:
-            await _decide_for_candidate(candidate, current_price, last_price, pct_change, simulated)
+            await _decide_for_candidate(
+                candidate, current_price, last_price, pct_change, simulated
+            )
         except Exception:
-            logger.exception("swap_trigger: decision pass failed for cap %s, continuing with remaining candidates", candidate.cap_id)
+            logger.exception(
+                "swap_trigger: decision pass failed for cap %s, continuing with remaining candidates",
+                candidate.cap_id,
+            )
 
 
 async def _decide_for_candidate(
@@ -94,7 +109,9 @@ async def _decide_for_candidate(
         )
         return
 
-    recent = activity_log.get_recent_activity(candidate.cap_id, ActionType.MOCK_SWAP, limit=10)
+    recent = activity_log.get_recent_activity(
+        candidate.cap_id, ActionType.MOCK_SWAP, limit=10
+    )
 
     context = {
         "trigger": {
@@ -163,11 +180,11 @@ async def _decide_for_candidate(
 
     decision = MockSwapDecision(
         type="mock_swap",
-        cap_id=detail.cap_id,
-        vault_id=detail.vault_id,
-        amount_mist=str(result["amount_mist"]),
-        risk_score=int(result["risk_score"]),
-        mock_pool_id=target,
+        capId=detail.cap_id,
+        vaultId=detail.vault_id,
+        amountMist=str(result["amount_mist"]),
+        riskScore=int(result["risk_score"]),
+        mockPoolId=target,
     )
 
     try:

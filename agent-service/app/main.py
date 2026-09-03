@@ -21,7 +21,7 @@ scheduler = AsyncIOScheduler()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     scheduler.add_job(
         sync_agent_index,
         "interval",

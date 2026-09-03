@@ -11,7 +11,13 @@ poll.
 import logging
 
 from app.models.policy import ActionType, StakeDecision
-from app.services import activity_log, agent_index, executor_client, sui_objects, validator_data
+from app.services import (
+    activity_log,
+    agent_index,
+    executor_client,
+    sui_objects,
+    validator_data,
+)
 from app.services.llm import decide_agent_action
 
 logger = logging.getLogger(__name__)
@@ -25,7 +31,9 @@ MIN_STAKING_THRESHOLD_MIST = 1_000_000_000
 COMMISSION_CHANGE_THRESHOLD_BPS = 50
 
 
-async def check_stake_trigger(force: bool = False, simulate_commission_change_bps: int | None = None) -> None:
+async def check_stake_trigger(
+    force: bool = False, simulate_commission_change_bps: int | None = None
+) -> None:
     """
     :param force: Skip the epoch-change and commission-move gates and run
         the candidate decision pass regardless (falling back to the full
@@ -76,7 +84,10 @@ async def check_stake_trigger(force: bool = False, simulate_commission_change_bp
                 candidate, state, changed_validators, simulate_commission_change_bps
             )
         except Exception:
-            logger.exception("stake_trigger: decision pass failed for cap %s, continuing with remaining candidates", candidate.cap_id)
+            logger.exception(
+                "stake_trigger: decision pass failed for cap %s, continuing with remaining candidates",
+                candidate.cap_id,
+            )
 
 
 async def _decide_for_candidate(
@@ -112,7 +123,9 @@ async def _decide_for_candidate(
         )
         return
 
-    recent = activity_log.get_recent_activity(candidate.cap_id, ActionType.STAKE, limit=10)
+    recent = activity_log.get_recent_activity(
+        candidate.cap_id, ActionType.STAKE, limit=10
+    )
 
     simulated = simulate_commission_change_bps is not None
     if simulated:
@@ -204,10 +217,10 @@ async def _decide_for_candidate(
 
     decision = StakeDecision(
         type="stake",
-        cap_id=detail.cap_id,
-        vault_id=detail.vault_id,
-        amount_mist=str(result["amount_mist"]),
-        risk_score=int(result["risk_score"]),
+        capId=detail.cap_id,
+        vaultId=detail.vault_id,
+        amountMist=str(result["amount_mist"]),
+        riskScore=int(result["risk_score"]),
         validator=target,
     )
 
