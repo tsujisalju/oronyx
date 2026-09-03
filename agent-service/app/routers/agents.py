@@ -1,11 +1,14 @@
 import time
 from decimal import Decimal, InvalidOperation
-from typing import Annotated
+from typing import Annotated, Any
 
 from app.models.agent import AgentDetail, AgentMetadataCreate, AgentSummary
+from app.models.agent_index import AgentCandidate
 from app.models.policy import ActionType, AgentPolicy
-from app.services import agent_metadata, sui_events, sui_objects
+from app.services import agent_index, agent_metadata, sui_events, sui_objects
 from app.services.llm import parse_policy_with_llm
+from app.services.triggers.stake_trigger import check_stake_trigger
+from app.services.triggers.swap_trigger import check_swap_trigger
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -46,7 +49,7 @@ def sui_to_mist(amount_sui: float) -> int:
     if amount < 0:
         raise ValueError("SUI amount cannot be negative")
 
-    mist = amount * Decimal("1000000000")
+    mist = amount * Decimal(1000000000)
 
     if mist != mist.to_integral_value():
         raise ValueError("SUI amount has more precision than MIST supports")
@@ -54,7 +57,7 @@ def sui_to_mist(amount_sui: float) -> int:
     return int(mist)
 
 
-def build_agent_policy(llm_policy: dict) -> AgentPolicy:
+def build_agent_policy(llm_policy: dict[str, Any]) -> AgentPolicy:
     """
     Convert the LLM's human-readable policy into the
     exact fields required by AgentPolicy.
@@ -65,7 +68,7 @@ def build_agent_policy(llm_policy: dict) -> AgentPolicy:
     spending_limit_period = sui_to_mist(llm_policy["spending_limit_period_sui"])
 
     period_length_ms = int(
-        Decimal(str(llm_policy["period_length_hours"])) * Decimal("3600000")
+        Decimal(str(llm_policy["period_length_hours"])) * Decimal(3600000)
     )
 
     allowed_actions = []
@@ -187,3 +190,52 @@ async def get_agent(cap_id: str):
 def decide():
     # Runtime decision logic will be implemented next.
     return {"status": "not implemented"}
+
+
+@router.post("/dev/sync-index")
+async def dev_sync_index():
+    """Manually run the candidate-index sync, for testing outside the
+    scheduled interval."""
+    await agent_index.sync_agent_index()
+    return {"status": "ok"}
+
+
+@router.get("/dev/candidates", response_model=list[AgentCandidate])
+def dev_candidates(action_type: Annotated[int, Query()]):
+    return agent_index.get_candidate_agents(action_type)
+
+
+@router.post("/dev/check-swap-trigger")
+async def dev_check_swap_trigger(
+    force: Annotated[bool, Query()] = False,
+    simulate_pct_change: Annotated[
+        float | None,
+        Query(
+            description="Only used with force=true. Reports this synthetic price move to the LLM instead of the real one."
+        ),
+    ] = None,
+):
+    """Manually run the swap trigger check, for testing outside the
+    scheduled interval. force=true bypasses the price-move threshold so
+    candidates get a decision pass regardless of the real market move."""
+    await check_swap_trigger(force=force, simulate_pct_change=simulate_pct_change)
+    return {"status": "ok"}
+
+
+@router.post("/dev/check-stake-trigger")
+async def dev_check_stake_trigger(
+    force: Annotated[bool, Query()] = False,
+    simulate_commission_change_bps: Annotated[
+        int | None,
+        Query(
+            description="Only used with force=true. Synthesizes a commission-change opportunity on each candidate's own allowed target."
+        ),
+    ] = None,
+):
+    """Manually run the stake trigger check, for testing outside the
+    scheduled interval. force=true bypasses the epoch/commission-move
+    gates so candidates get a decision pass regardless."""
+    await check_stake_trigger(
+        force=force, simulate_commission_change_bps=simulate_commission_change_bps
+    )
+    return {"status": "ok"}
