@@ -65,6 +65,28 @@ export function formatMist(mist: number): string {
   return `${(mist / MIST_PER_SUI).toFixed(2)} SUI`;
 }
 
+// e.g. "2 minutes ago" — for the audit-trail activity feed, where
+// timestamps come from activity_log's ISO created_at strings.
+export function formatRelativeTime(isoTimestamp: string): string {
+  const deltaMs = Date.now() - new Date(isoTimestamp).getTime();
+  const deltaSeconds = Math.round(deltaMs / 1000);
+
+  if (deltaSeconds < 60) return "Just now";
+
+  const deltaMinutes = Math.round(deltaSeconds / 60);
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes} minute${deltaMinutes === 1 ? "" : "s"} ago`;
+  }
+
+  const deltaHours = Math.round(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `${deltaHours} hour${deltaHours === 1 ? "" : "s"} ago`;
+  }
+
+  const deltaDays = Math.round(deltaHours / 24);
+  return `${deltaDays} day${deltaDays === 1 ? "" : "s"} ago`;
+}
+
 // Mirrors oronyx::capability's action-type codes (see move/sources/capability.move
 // and the ACTION_CODES map below, which only exposes SWAP/STAKE/TRANSFER in its
 // UI — CETUS_SWAP is included here since a cap can still carry it).

@@ -105,3 +105,25 @@ export async function getAgent(capId: string): Promise<AgentDetail | null> {
   }
   return response.json();
 }
+
+export interface ActivityRecord {
+  id: number;
+  cap_id: string;
+  action_type: number;
+  decision: string;
+  reasoning: string;
+  target: string | null;
+  amount_mist: string | null;
+  risk_score: number | null;
+  created_at: string;
+}
+
+export async function getActivity(owner: string): Promise<ActivityRecord[]> {
+  const response = await fetch(
+    `${AGENT_SERVICE_URL}/agents/activity?owner=${owner}`,
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to load activity: ${await response.text()}`);
+  }
+  return response.json();
+}

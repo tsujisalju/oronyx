@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
-import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 import {
   ArrowLeft,
   CircleArrowDown,
@@ -57,10 +56,8 @@ import { Agent, agentFromDetail, MIST_PER_SUI } from "@/lib/agents";
 import { getAgent } from "@/lib/agent-service";
 import EditableAgentName from "@/components/editable-agent-name";
 import { notifyBalanceChanged, useSuiBalance } from "@/lib/use-sui-balance";
-import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
+import { depositToVault, withdrawFromVault, deactivateAgent } from "@/lib/transactions";
 import { Spinner } from "@/components/ui/spinner";
-
-const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
 
 const PERCENT_OPTIONS = [0, 25, 50, 75, 100];
 
@@ -295,21 +292,10 @@ export default function AgentPage() {
     try {
       const amountMist = Math.round(amount * MIST_PER_SUI);
 
-      const tx = new Transaction();
-      tx.setSender(account.address);
-      const coin = tx.add(
-        coinWithBalance({ balance: amountMist, useGasCoin: false }),
-      );
-      tx.moveCall({
-        target: `${PACKAGE_ID}::capability::deposit`,
-        arguments: [tx.object(agent.vaultId), coin],
-      });
-
-      const result = await signAndExecuteSponsoredTransaction({
-        transaction: tx,
+      const result = await depositToVault({
         sender: account.address,
-        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::deposit`],
-        allowedAddresses: [account.address],
+        vaultId: agent.vaultId,
+        amountMist,
       });
 
       if (result.$kind !== "Transaction") {
@@ -348,18 +334,10 @@ export default function AgentPage() {
     setIsWithdrawing(true);
 
     try {
-      const tx = new Transaction();
-      const coin = tx.moveCall({
-        target: `${PACKAGE_ID}::capability::withdraw`,
-        arguments: [tx.object(agent.vaultId), tx.pure.u64(amountMist)],
-      });
-      tx.transferObjects([coin], tx.pure.address(account.address));
-
-      const result = await signAndExecuteSponsoredTransaction({
-        transaction: tx,
+      const result = await withdrawFromVault({
         sender: account.address,
-        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::withdraw`],
-        allowedAddresses: [account.address],
+        vaultId: agent.vaultId,
+        amountMist,
       });
 
       if (result.$kind !== "Transaction") {
@@ -391,17 +369,9 @@ export default function AgentPage() {
     setIsDeactivating(true);
 
     try {
-      const tx = new Transaction();
-      tx.moveCall({
-        target: `${PACKAGE_ID}::capability::deactivate`,
-        arguments: [tx.object(agent.capId)],
-      });
-
-      const result = await signAndExecuteSponsoredTransaction({
-        transaction: tx,
+      const result = await deactivateAgent({
         sender: account.address,
-        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::deactivate`],
-        allowedAddresses: [account.address],
+        capId: agent.capId,
       });
 
       if (result.$kind !== "Transaction") {

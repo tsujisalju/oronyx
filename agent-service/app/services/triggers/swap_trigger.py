@@ -54,7 +54,6 @@ async def check_swap_trigger(
     last_price = market_data.get_last_seen_price(pool_id)
     market_data.set_last_seen_price(pool_id, current_price)
 
-    simulated = False
     if not force:
         if last_price is None or last_price == 0:
             return
@@ -66,7 +65,6 @@ async def check_swap_trigger(
         last_price = last_price if last_price is not None else current_price
 
         if simulate_pct_change is not None:
-            simulated = True
             current_price = last_price * (1 + Decimal(str(simulate_pct_change)) / 100)
             pct_change = abs(Decimal(str(simulate_pct_change)))
         else:
@@ -79,9 +77,7 @@ async def check_swap_trigger(
     candidates = agent_index.get_candidate_agents(ActionType.MOCK_SWAP)
     for candidate in candidates:
         try:
-            await _decide_for_candidate(
-                candidate, current_price, last_price, pct_change, simulated
-            )
+            await _decide_for_candidate(candidate, current_price, last_price, pct_change)
         except Exception:
             logger.exception(
                 "swap_trigger: decision pass failed for cap %s, continuing with remaining candidates",
@@ -94,7 +90,6 @@ async def _decide_for_candidate(
     current_price: Decimal,
     last_price: Decimal,
     pct_change: Decimal,
-    simulated: bool = False,
 ) -> None:
     detail = await sui_objects.get_agent_detail(candidate.cap_id)
     if detail is None or not detail.active:
@@ -120,7 +115,6 @@ async def _decide_for_candidate(
             "last_price": str(last_price),
             "current_price": str(current_price),
             "pct_change": str(pct_change),
-            "simulated": simulated,
         },
         "agent": {
             "cap_id": detail.cap_id,

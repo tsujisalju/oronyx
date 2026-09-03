@@ -18,10 +18,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
-import { Transaction } from "@mysten/sui/transactions";
-import { SUI_CLOCK_OBJECT_ID, isValidSuiAddress } from "@mysten/sui/utils";
+import { isValidSuiAddress } from "@mysten/sui/utils";
 
-import { signAndExecuteSponsoredTransaction } from "@/lib/sponsored-transaction";
+import { createAgentCap } from "@/lib/transactions";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,8 +65,6 @@ const CETUS_SWAP_CODE = 3;
 type ConfigMode = "natural" | "advanced";
 
 const MIST_PER_SUI = 1_000_000_000;
-const PACKAGE_ID = process.env.NEXT_PUBLIC_ORONYX_PACKAGE_ID!;
-const OPERATOR_ADDR = process.env.NEXT_PUBLIC_ORONYX_OPERATOR_ADDR!;
 const MOCK_POOL_ID = process.env.NEXT_PUBLIC_ORONYX_MOCK_POOL_ID!;
 
 export default function NewAgentPage() {
@@ -279,28 +276,16 @@ export default function NewAgentPage() {
         ? 0
         : Date.now() + durationInputToMs(expiryValue, expiryUnit);
 
-      const tx = new Transaction();
-      tx.moveCall({
-        target: `${PACKAGE_ID}::capability::create_agent_cap`,
-        arguments: [
-          tx.pure.address(OPERATOR_ADDR),
-          tx.pure.u64(Math.round(numericSpendingLimit * MIST_PER_SUI)),
-          tx.pure.u64(Math.round(numericPeriodLimit * MIST_PER_SUI)),
-          tx.pure.u64(periodLengthMs),
-          tx.pure.vector("u8", actionCodes),
-          tx.pure.vector("address", targets),
-          tx.pure.vector("address", protocolTargets),
-          tx.pure.u8(riskThreshold),
-          tx.pure.u64(expiryAbsoluteMs),
-          tx.object(SUI_CLOCK_OBJECT_ID),
-        ],
-      });
-
-      const result = await signAndExecuteSponsoredTransaction({
-        transaction: tx,
+      const result = await createAgentCap({
         sender: account.address,
-        allowedMoveCallTargets: [`${PACKAGE_ID}::capability::create_agent_cap`],
-        allowedAddresses: [account.address],
+        spendingLimitPerTxMist: Math.round(numericSpendingLimit * MIST_PER_SUI),
+        spendingLimitPeriodMist: Math.round(numericPeriodLimit * MIST_PER_SUI),
+        periodLengthMs,
+        actionCodes,
+        targets,
+        protocolTargets,
+        riskThreshold,
+        expiryAbsoluteMs,
       });
 
       if (result.$kind !== "Transaction") {

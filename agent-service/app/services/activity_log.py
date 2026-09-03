@@ -77,6 +77,31 @@ def log_decision(
         connection.close()
 
 
+def get_activity_for_caps(cap_ids: list[str], limit: int = 50) -> list[sqlite3.Row]:
+    """Merged, time-ordered activity feed across every action_type for a
+    set of caps — for the audit-trail UI, unlike get_recent_activity
+    below which is deliberately scoped to one (cap_id, action_type) pair
+    for LLM context.
+    """
+    if not cap_ids:
+        return []
+
+    connection = _connect()
+    try:
+        placeholders = ",".join("?" for _ in cap_ids)
+        return connection.execute(
+            f"""
+            SELECT * FROM activity_log
+            WHERE cap_id IN ({placeholders})
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*cap_ids, limit),
+        ).fetchall()
+    finally:
+        connection.close()
+
+
 def get_recent_activity(cap_id: str, action_type: int, limit: int = 10) -> list[sqlite3.Row]:
     """Recent decisions for this cap, scoped to a single action_type —
     a candidate can allow multiple actions (e.g. MOCK_SWAP and STAKE), and

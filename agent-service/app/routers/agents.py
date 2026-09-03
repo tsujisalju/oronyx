@@ -2,10 +2,10 @@ import time
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any
 
-from app.models.agent import AgentDetail, AgentMetadataCreate, AgentSummary
+from app.models.agent import ActivityRecord, AgentDetail, AgentMetadataCreate, AgentSummary
 from app.models.agent_index import AgentCandidate
 from app.models.policy import ActionType, AgentPolicy
-from app.services import agent_index, agent_metadata, sui_events, sui_objects
+from app.services import activity_log, agent_index, agent_metadata, sui_events, sui_objects
 from app.services.llm import parse_policy_with_llm
 from app.services.triggers.stake_trigger import check_stake_trigger
 from app.services.triggers.swap_trigger import check_swap_trigger
@@ -175,6 +175,29 @@ def save_metadata(metadata: AgentMetadataCreate):
         "cap_id": metadata.cap_id,
         "name": name,
     }
+
+
+@router.get("/activity", response_model=list[ActivityRecord])
+async def get_activity(
+    owner: Annotated[str, Query(description="Sui address of the connected wallet")],
+):
+    created = await sui_events.get_created_caps_for_owner(owner)
+    cap_ids = [cap.cap_id for cap in created]
+    rows = activity_log.get_activity_for_caps(cap_ids)
+    return [
+        ActivityRecord(
+            id=row["id"],
+            cap_id=row["cap_id"],
+            action_type=row["action_type"],
+            decision=row["decision"],
+            reasoning=row["reasoning"],
+            target=row["target"],
+            amount_mist=row["amount_mist"],
+            risk_score=row["risk_score"],
+            created_at=row["created_at"],
+        )
+        for row in rows
+    ]
 
 
 @router.get("/{cap_id}", response_model=AgentDetail)
