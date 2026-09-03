@@ -16,6 +16,18 @@ class AgentMetadataCreate(BaseModel):
     name: str
 
 
+class ActivityRecord(BaseModel):
+    id: int
+    cap_id: str
+    action_type: int
+    decision: str
+    reasoning: str
+    target: str | None = None
+    amount_mist: str | None = None
+    risk_score: int | None = None
+    created_at: str
+
+
 class AgentDetail(BaseModel):
     cap_id: str
     vault_id: str
