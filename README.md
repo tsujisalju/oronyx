@@ -4,14 +4,14 @@ Scoped Agent Wallets on Sui — a Move-based trust layer for autonomous
 financial agents, letting a user define exactly what an agent is allowed to
 do with their funds, then enforcing that boundary on-chain.
 
+> "They were born of nothingness, turning chaos into order. They define the
+> rules and destiny of all things."
+
 Team Evernight — MUBA Blockchain Hackathon 2026
 
 - Qayyum Yazid (tsujisalju)
 - Muiz Yazid (cikti)
 - Waiz Yazid (waizizzy)
-
-> "They were born of nothingness, turning chaos into order. They define the
-> rules and destiny of all things."
 
 ## Problem Statement
 
