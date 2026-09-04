@@ -6,6 +6,10 @@ do with their funds, then enforcing that boundary on-chain.
 
 Team Evernight — MUBA Blockchain Hackathon 2026
 
+- Qayyum Yazid (tsujisalju)
+- Muiz Yazid (cikti)
+- Waiz Yazid (waizizzy)
+
 > "They were born of nothingness, turning chaos into order. They define the
 > rules and destiny of all things."
 
@@ -77,17 +81,17 @@ See `frontend/lib/sponsored-transaction.ts` and `executor/src/enoki.ts`.
 
 ## Structure
 
-| Directory        | What's in it                                                                                                                                                           |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/move`          | The Sui Move contract — vaults, agent capabilities, policy enforcement, and the supported action types (transfer, stake, mock swap, Cetus swap). See `move/README.md`. |
+| Directory        | What's in it                                                                                                                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/move`          | The Sui Move contract — vaults, agent capabilities, policy enforcement, and the supported action types (transfer, stake, mock swap, Cetus swap). See `move/README.md`.                                     |
 | `/executor`      | TypeScript service that builds and submits the actual Sui transactions an agent takes, signed by a dedicated operator keypair, and proxies sponsored-transaction calls to Enoki. See `executor/README.md`. |
-| `/agent-service` | Python/FastAPI service responsible for the agent's decision-making — parsing user policy from natural language, deciding what action to take and how risky it is.    |
-| `/frontend`      | Next.js dApp — agent creation, policy setup, and the audit/approval dashboard.                                                                                         |
+| `/agent-service` | Python/FastAPI service responsible for the agent's decision-making — parsing user policy from natural language, deciding what action to take and how risky it is.                                          |
+| `/frontend`      | Next.js dApp — agent creation, policy setup, and the audit/approval dashboard.                                                                                                                             |
 
 ## Smart Contracts (Testnet)
 
 | Item               | Value                                                                |
-| ------------------ | --------------------------------------------------------------------- |
+| ------------------ | -------------------------------------------------------------------- |
 | Package ID         | `0x5ee5b401f1a2568ca7904b28f44494308c6b956aafb36e4c2759e7ffe47d2115` |
 | Upgrade Capability | `0x4219edeca77bbd2453c543fb365d4303fe65e14374d5559e92d702268f17a0f1` |
 | Chain ID           | `4c78adac`                                                           |
