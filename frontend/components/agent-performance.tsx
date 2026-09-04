@@ -21,7 +21,7 @@ interface Execution {
   agent: string;
   amount: number;
   risk: number;
-  status: "APPROVED" | "FLAGGED";
+  status: "APPROVED" | "FLAGGED" | "FAILED";
 }
 
 interface AgentPerformanceProps {

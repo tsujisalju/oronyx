@@ -17,7 +17,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 interface Execution {
   time: string;
-  status: "APPROVED" | "FLAGGED";
+  status: "APPROVED" | "FLAGGED" | "FAILED";
 }
 
 interface ExecutionChartProps {
@@ -33,6 +33,10 @@ const chartConfig = {
     label: "Flagged",
     color: "var(--color-amber-500)",
   },
+  failed: {
+    label: "Failed",
+    color: "var(--color-red-500)",
+  },
 } satisfies ChartConfig;
 
 export default function ExecutionChart({ executions }: ExecutionChartProps) {
@@ -41,16 +45,17 @@ export default function ExecutionChart({ executions }: ExecutionChartProps) {
       let bucket = acc.find((item) => item.time === execution.time);
 
       if (!bucket) {
-        bucket = { time: execution.time, approved: 0, flagged: 0 };
+        bucket = { time: execution.time, approved: 0, flagged: 0, failed: 0 };
         acc.push(bucket);
       }
 
       if (execution.status === "APPROVED") bucket.approved += 1;
       if (execution.status === "FLAGGED") bucket.flagged += 1;
+      if (execution.status === "FAILED") bucket.failed += 1;
 
       return acc;
     },
-    [] as { time: string; approved: number; flagged: number }[],
+    [] as { time: string; approved: number; flagged: number; failed: number }[],
   );
 
   return (
@@ -69,6 +74,9 @@ export default function ExecutionChart({ executions }: ExecutionChartProps) {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-sm bg-amber-500" /> Flagged
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-red-500" /> Failed
             </span>
           </div>
         </div>
@@ -91,6 +99,12 @@ export default function ExecutionChart({ executions }: ExecutionChartProps) {
               dataKey="flagged"
               stackId="outcome"
               fill="var(--color-flagged)"
+              radius={[0, 0, 0, 0]}
+            />
+            <Bar
+              dataKey="failed"
+              stackId="outcome"
+              fill="var(--color-failed)"
               radius={[3, 3, 0, 0]}
             />
           </BarChart>
