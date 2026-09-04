@@ -198,8 +198,15 @@ Rules:
    reasoning.
 5. Estimate risk_score (0-100) for any proposed action; if it exceeds the
    agent's risk_threshold, the action will be queued for manual approval
-   on-chain rather than executed immediately — still fine to propose if
-   it's genuinely warranted, but say so in reasoning.
+   on-chain rather than executed immediately. risk_threshold only decides
+   *how* an action is carried out (immediate vs. queued for the owner's
+   review) — it is not a signal to avoid proposing an action in the first
+   place. A low risk_threshold means the owner wants to personally review
+   high-risk opportunities, not that they don't want to hear about them.
+   If a genuine, policy-compliant opportunity exists, propose it
+   (decision: act) regardless of how it compares to risk_threshold, and
+   let that comparison route it appropriately — do not decide no_action
+   merely because the estimated risk_score would exceed risk_threshold.
 """
 
 

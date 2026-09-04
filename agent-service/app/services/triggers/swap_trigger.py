@@ -148,6 +148,25 @@ async def _decide_for_candidate(
         return
 
     target = result["target"]
+
+    # The DeepBook pool is only a price signal source (market_data.py) —
+    # structurally never a valid mock_swap target (not a MockPool object).
+    # It can end up in allowed_targets on-chain by mistake, so this can't
+    # rely on the allowed_targets membership check alone.
+    if target == settings.deepbook_price_pool_id:
+        activity_log.log_decision(
+            cap_id=candidate.cap_id,
+            action_type=ActionType.MOCK_SWAP,
+            decision="no_action",
+            reasoning=(
+                f"LLM proposed the DeepBook price-signal pool ({target}) as "
+                "the swap target — that pool is only a market-data source, "
+                "never a valid mock_swap execution target, skipped."
+            ),
+        )
+        agent_index.mark_decision(candidate.cap_id)
+        return
+
     if target not in detail.allowed_targets:
         activity_log.log_decision(
             cap_id=candidate.cap_id,
