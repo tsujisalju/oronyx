@@ -79,6 +79,10 @@ payment, and the executor submits the fully-signed bundle
 station never reaches the browser — it lives only in the executor service.
 See `frontend/lib/sponsored-transaction.ts` and `executor/src/enoki.ts`.
 
+**External DeFi platform integrations.** Oronyx implements a swap action on Cetus
+DEX and reads pool price changes on Sui DeepBook, supplying them as market triggers
+for agent decisions.
+
 ## Structure
 
 | Directory        | What's in it                                                                                                                                                                                               |
