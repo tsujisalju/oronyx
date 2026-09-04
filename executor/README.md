@@ -64,11 +64,12 @@ npm run dev            # runs src/executeAgentAction.ts via tsx
 
 Required environment variables:
 
-| Variable              | Description                                                          |
-| --------------------- | -------------------------------------------------------------------- |
-| `ORONYX_PACKAGE_ID`   | Published package ID from `sui move publish` (see `/move/README.md`) |
-| `ORONYX_OPERATOR_KEY` | Operator's private key, `suiprivkey1...` format                      |
-| `ORONYX_FULLNODE_URL` | Optional override; defaults to Sui testnet fullnode                  |
+| Variable                       | Description                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `ORONYX_PACKAGE_ID`            | Published package ID from `sui move publish` (see `/move/README.md`)                 |
+| `ORONYX_OPERATOR_KEY`          | Operator's private key, `suiprivkey1...` format                                       |
+| `ORONYX_ENOKI_PRIVATE_API_KEY` | Enoki private API key, required by `/sponsor` and `/execute-sponsored` (see `src/enoki.ts`) |
+| `ORONYX_FULLNODE_URL`          | Optional override; defaults to Sui testnet fullnode                                   |
 
 ## Why Cetus alone is two transactions
 
