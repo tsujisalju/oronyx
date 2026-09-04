@@ -1,5 +1,7 @@
 # Oronyx
 
+<img width="388" height="144" alt="oronyx-logomark-bg" src="https://github.com/user-attachments/assets/f18e02fa-0ef2-43db-bc1f-1e613e1b172b" />
+
 Scoped Agent Wallets on Sui — a Move-based trust layer for autonomous
 financial agents, letting a user define exactly what an agent is allowed to
 do with their funds, then enforcing that boundary on-chain.
