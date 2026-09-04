@@ -2,10 +2,21 @@ import time
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any
 
-from app.models.agent import ActivityRecord, AgentDetail, AgentMetadataCreate, AgentSummary
+from app.models.agent import (
+    ActivityRecord,
+    AgentDetail,
+    AgentMetadataCreate,
+    AgentSummary,
+)
 from app.models.agent_index import AgentCandidate
 from app.models.policy import ActionType, AgentPolicy
-from app.services import activity_log, agent_index, agent_metadata, sui_events, sui_objects
+from app.services import (
+    activity_log,
+    agent_index,
+    agent_metadata,
+    sui_events,
+    sui_objects,
+)
 from app.services.llm import parse_policy_with_llm
 from app.services.triggers.stake_trigger import check_stake_trigger
 from app.services.triggers.swap_trigger import check_swap_trigger
