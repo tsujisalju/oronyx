@@ -1,5 +1,5 @@
-import AuditTrailDashboard from "@/components/audit-trail-dashboard";
+import Dashboard from "@/components/dashboard";
 
 export default function DashboardPage() {
-  return <AuditTrailDashboard />;
+  return <Dashboard />;
 }

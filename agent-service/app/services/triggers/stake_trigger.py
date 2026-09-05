@@ -225,7 +225,7 @@ async def _decide_for_candidate(
     )
 
     try:
-        await executor.execute_agent_action(decision)
+        exec_result = await executor.execute_agent_action(decision)
     except Exception:
         logger.exception(
             "stake_trigger: executor submission failed for cap %s, logging as failed act attempt",
@@ -243,6 +243,8 @@ async def _decide_for_candidate(
         agent_index.mark_decision(candidate.cap_id)
         return
 
+    tx_digest = exec_result.get("txDigest") if isinstance(exec_result, dict) else None
+
     activity_log.log_decision(
         cap_id=candidate.cap_id,
         action_type=ActionType.STAKE,
@@ -251,5 +253,6 @@ async def _decide_for_candidate(
         target=target,
         amount_mist=decision.amount_mist,
         risk_score=decision.risk_score,
+        tx_digest=tx_digest,
     )
     agent_index.mark_decision(candidate.cap_id)

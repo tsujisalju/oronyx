@@ -64,7 +64,8 @@ export default function Home() {
           <div className="flex flex-col gap-4">
             <small className="text-lg font-bold">THE PROBLEM</small>
             <h1 className="text-4xl lg:text-5xl font-display">
-              Agentic DeFi is kind of dangerous.
+              AI agents can move money. But should they have unlimited
+              authority?
             </h1>
             <p className="text-lg text-muted-foreground">
               AI agents are increasingly trusted to act autonomously with real
@@ -86,7 +87,7 @@ export default function Home() {
           <div className="flex flex-col gap-4 order-2">
             <small className="text-lg font-bold">THE SOLUTION</small>
             <h1 className="text-4xl lg:text-5xl font-display">
-              Wanna go fast? Buckle your seatbelts.
+              The AI provides the intelligence. Move controls the authority.
             </h1>
             <p className="text-lg text-muted-foreground">
               Oronyx solves this by moving policy enforcement on-chain. When a
@@ -101,6 +102,15 @@ export default function Home() {
               agent&apos;s backend never holds a blank check — it holds a
               scoped, revocable, on-chain-enforced permission slip.
             </p>
+          </div>
+        </div>
+        <div className="w-full max-w-5xl mx-auto flex flex-col justify-center px-8 py-16 text-center">
+          <div className="flex flex-col gap-4 order-2">
+            <small className="text-lg font-bold">THE FLOW</small>
+            <h1 className="text-4xl lg:text-5xl font-display">
+              Here&apos;s how it works.
+            </h1>
+            {/* TODO: Oronyx architecture flow using React Flow */}
           </div>
         </div>
       </main>

@@ -25,6 +25,7 @@ class ActivityRecord(BaseModel):
     target: str | None = None
     amount_mist: str | None = None
     risk_score: int | None = None
+    tx_digest: str | None = None
     created_at: str
 
 
