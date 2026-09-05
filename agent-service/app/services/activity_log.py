@@ -39,6 +39,12 @@ def _connect():
 
     connection.commit()
 
+    try:
+        connection.execute("ALTER TABLE activity_log ADD COLUMN tx_digest TEXT")
+        connection.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     return connection
 
 
@@ -50,6 +56,7 @@ def log_decision(
     target: str | None = None,
     amount_mist: str | None = None,
     risk_score: int | None = None,
+    tx_digest: str | None = None,
 ) -> None:
     connection = _connect()
     try:
@@ -57,9 +64,9 @@ def log_decision(
             """
             INSERT INTO activity_log (
                 cap_id, action_type, decision, reasoning,
-                target, amount_mist, risk_score, created_at
+                target, amount_mist, risk_score, tx_digest, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 cap_id,
@@ -69,6 +76,7 @@ def log_decision(
                 target,
                 amount_mist,
                 risk_score,
+                tx_digest,
                 datetime.now(timezone.utc).isoformat(),
             ),
         )

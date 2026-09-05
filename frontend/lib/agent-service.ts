@@ -115,6 +115,7 @@ export interface ActivityRecord {
   target: string | null;
   amount_mist: string | null;
   risk_score: number | null;
+  tx_digest: string | null;
   created_at: string;
 }
 

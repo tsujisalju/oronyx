@@ -60,7 +60,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { formatMist, formatRelativeTime } from "@/lib/agents";
+import { formatMist, formatRelativeTime, suiExplorerTxUrl } from "@/lib/agents";
 import {
   ActivityRecord,
   AgentDetail,
@@ -93,6 +93,7 @@ type AuditRecord = {
   riskThreshold: number | null;
   reason: string;
   targetAddress: string | null;
+  txDigest: string | null;
   status: AuditStatus;
   timestamp: string;
   timestampIso: string;
@@ -255,6 +256,7 @@ export default function AuditPage() {
             matched?.reasoning ??
             "Flagged by the policy engine for exceeding the agent's risk threshold.",
           targetAddress: pending.target,
+          txDigest: null,
           status: "FLAGGED",
           timestamp: formatRelativeTime(createdAtIso),
           timestampIso: createdAtIso,
@@ -316,6 +318,7 @@ export default function AuditPage() {
             riskThreshold: threshold,
             reason: record.reasoning,
             targetAddress: record.target,
+            txDigest: record.tx_digest,
             status,
             timestamp: formatRelativeTime(record.created_at),
             timestampIso: record.created_at,
@@ -771,6 +774,22 @@ export default function AuditPage() {
                     <p className="mt-1 break-all font-mono text-sm">
                       {selectedRecord.targetAddress}
                     </p>
+                  </div>
+                )}
+
+                {selectedRecord.txDigest && (
+                  <div>
+                    <p className="text-xs font-medium uppercase text-muted-foreground">
+                      Transaction
+                    </p>
+                    <a
+                      href={suiExplorerTxUrl(selectedRecord.txDigest)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block break-all font-mono text-sm text-primary underline underline-offset-2"
+                    >
+                      {selectedRecord.txDigest}
+                    </a>
                   </div>
                 )}
 

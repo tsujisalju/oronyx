@@ -55,6 +55,15 @@ export type AgentActionDecision =
   | CetusSwapDecision
   | TransferDecision;
 
+// signAndExecuteTransaction returns a discriminated union keyed on $kind
+// ('Transaction' | 'FailedTransaction') — the digest lives on whichever
+// branch matched, not at the top level.
+function digestOf(result: Awaited<ReturnType<SuiGrpcClient["signAndExecuteTransaction"]>>) {
+  return result.$kind === "Transaction"
+    ? result.Transaction.digest
+    : result.FailedTransaction.digest;
+}
+
 function getClient() {
   return new SuiGrpcClient({ baseUrl: FULLNODE_BASE_URL, network: NETWORK });
 }
@@ -226,12 +235,18 @@ export async function executeAgentAction(decision: AgentActionDecision) {
   const operatorKeypair = getOperatorKeypair();
 
   switch (decision.type) {
-    case "transfer":
-      return { result: await runTransfer(client, operatorKeypair, decision) };
-    case "stake":
-      return { result: await runStake(client, operatorKeypair, decision) };
-    case "mock_swap":
-      return { result: await runMockSwap(client, operatorKeypair, decision) };
+    case "transfer": {
+      const result = await runTransfer(client, operatorKeypair, decision);
+      return { result, txDigest: digestOf(result) };
+    }
+    case "stake": {
+      const result = await runStake(client, operatorKeypair, decision);
+      return { result, txDigest: digestOf(result) };
+    }
+    case "mock_swap": {
+      const result = await runMockSwap(client, operatorKeypair, decision);
+      return { result, txDigest: digestOf(result) };
+    }
     case "cetus_swap": {
       const policyResult = await runCetusPolicyCheck(
         client,
@@ -241,7 +256,9 @@ export async function executeAgentAction(decision: AgentActionDecision) {
       // TODO: check policyResult effects/events for ActionFlagged vs
       // ActionExecuted before proceeding, stop here if flagged.
       const swapResult = await runCetusSwap(client, operatorKeypair, decision);
-      return { policyResult, swapResult };
+      // swapResult is the economically meaningful transaction — surfaced
+      // as the audit-trail digest, unlike the preceding policy-check tx.
+      return { policyResult, swapResult, txDigest: digestOf(swapResult) };
     }
 
     default: {

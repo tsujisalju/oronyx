@@ -80,11 +80,13 @@ function dateBucket(isoTimestamp: string): string {
   });
 }
 
-export default function AuditTrailDashboard() {
+export default function Dashboard() {
   const account = useCurrentAccount();
 
   const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
-  const [agentDetails, setAgentDetails] = useState<Record<string, AgentDetail>>({});
+  const [agentDetails, setAgentDetails] = useState<Record<string, AgentDetail>>(
+    {},
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -114,7 +116,9 @@ export default function AuditTrailDashboard() {
     listAgents(account.address)
       .then(async (summaries) => {
         const details = await Promise.all(
-          summaries.map((summary) => getAgent(summary.cap_id).catch(() => null)),
+          summaries.map((summary) =>
+            getAgent(summary.cap_id).catch(() => null),
+          ),
         );
 
         const detailMap: Record<string, AgentDetail> = {};
@@ -149,7 +153,8 @@ export default function AuditTrailDashboard() {
 
   function agentName(capId: string): string {
     return (
-      agentDetails[capId]?.name ?? `Agent ${capId.slice(0, 6)}…${capId.slice(-4)}`
+      agentDetails[capId]?.name ??
+      `Agent ${capId.slice(0, 6)}…${capId.slice(-4)}`
     );
   }
 
@@ -200,10 +205,17 @@ export default function AuditTrailDashboard() {
     const bucket = selectedPeriod === "24H" ? hourBucket : dateBucket;
 
     return activityRecords
-      .filter((record) => record.decision === "act" || record.decision === "act_failed")
-      .filter((record) => cutoff === null || new Date(record.created_at).getTime() >= cutoff)
       .filter(
-        (record) => selectedAgentId === ALL_AGENTS || record.cap_id === selectedAgentId,
+        (record) =>
+          record.decision === "act" || record.decision === "act_failed",
+      )
+      .filter(
+        (record) =>
+          cutoff === null || new Date(record.created_at).getTime() >= cutoff,
+      )
+      .filter(
+        (record) =>
+          selectedAgentId === ALL_AGENTS || record.cap_id === selectedAgentId,
       )
       .map((record): Execution => {
         const threshold = agentDetails[record.cap_id]?.risk_threshold ?? null;
@@ -213,7 +225,8 @@ export default function AuditTrailDashboard() {
         if (record.decision === "act_failed") {
           status = "FAILED";
         } else {
-          status = threshold != null && risk > threshold ? "FLAGGED" : "APPROVED";
+          status =
+            threshold != null && risk > threshold ? "FLAGGED" : "APPROVED";
         }
 
         return {
@@ -221,7 +234,9 @@ export default function AuditTrailDashboard() {
           capId: record.cap_id,
           agent: agentName(record.cap_id),
           action: actionTypeToAction(record.action_type),
-          amount: record.amount_mist ? Number(record.amount_mist) / 1_000_000_000 : 0,
+          amount: record.amount_mist
+            ? Number(record.amount_mist) / 1_000_000_000
+            : 0,
           risk,
           status,
           time: bucket(record.created_at),
@@ -245,7 +260,9 @@ export default function AuditTrailDashboard() {
   ).length;
 
   const approvalRate =
-    totalExecutions === 0 ? 0 : Math.round((approvedExecutions / totalExecutions) * 100);
+    totalExecutions === 0
+      ? 0
+      : Math.round((approvedExecutions / totalExecutions) * 100);
 
   const averageRisk =
     totalExecutions === 0
@@ -255,7 +272,8 @@ export default function AuditTrailDashboard() {
             totalExecutions,
         );
 
-  const riskBand = averageRisk < 30 ? "Low" : averageRisk < 60 ? "Medium" : "High";
+  const riskBand =
+    averageRisk < 30 ? "Low" : averageRisk < 60 ? "Medium" : "High";
 
   const activeAgentCount = Object.values(agentDetails).filter(
     (detail) => detail.active,

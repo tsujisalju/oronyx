@@ -92,6 +92,15 @@ async def get_pool_price(pool_id: str) -> Decimal:
 
     response = result.result_data
     if not response.command_outputs or not response.command_outputs[0].return_values:
+        status = response.transaction.effects.status if response.transaction else None
+        if status is not None and not status.success:
+            raise RuntimeError(
+                f"mid_price aborted on-chain for pool {pool_id}: "
+                f"{status.error.description if status.error else status}. "
+                "Likely cause: the pool's order book is currently empty "
+                "(no live bids/asks to compute a mid price from) — this is "
+                "a testnet liquidity issue, not a code bug."
+            )
         raise RuntimeError(f"mid_price returned no value for pool {pool_id}")
 
     return_bytes = response.command_outputs[0].return_values[0].value.value

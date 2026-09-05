@@ -43,31 +43,36 @@ async def check_swap_trigger(
         logger.info("swap_trigger: DEEPBOOK_PRICE_POOL_ID not configured, skipping")
         return
 
-    try:
-        current_price = await market_data.get_pool_price(pool_id)
-    except Exception:
-        logger.exception(
-            "swap_trigger: price read failed for pool %s, skipping this cycle", pool_id
-        )
-        return
-
-    last_price = market_data.get_last_seen_price(pool_id)
-    market_data.set_last_seen_price(pool_id, current_price)
-
-    if not force:
-        if last_price is None or last_price == 0:
-            return
-
-        pct_change = abs((current_price - last_price) / last_price) * 100
-        if pct_change < SWAP_TRIGGER_THRESHOLD_PCT:
-            return
+    if simulate_pct_change is not None:
+        # Simulated moves don't need a live price read at all — the whole
+        # point is to fabricate the move, not observe a real one. This
+        # also means simulate mode keeps working even when the pool's
+        # order book is empty and mid_price reverts on-chain (a real,
+        # observed testnet liquidity issue, not a bug in this service).
+        last_price = market_data.get_last_seen_price(pool_id) or Decimal("1.0")
+        current_price = last_price * (1 + Decimal(str(simulate_pct_change)) / 100)
+        pct_change = abs(Decimal(str(simulate_pct_change)))
     else:
-        last_price = last_price if last_price is not None else current_price
+        try:
+            current_price = await market_data.get_pool_price(pool_id)
+        except Exception:
+            logger.exception(
+                "swap_trigger: price read failed for pool %s, skipping this cycle", pool_id
+            )
+            return
 
-        if simulate_pct_change is not None:
-            current_price = last_price * (1 + Decimal(str(simulate_pct_change)) / 100)
-            pct_change = abs(Decimal(str(simulate_pct_change)))
+        last_price = market_data.get_last_seen_price(pool_id)
+        market_data.set_last_seen_price(pool_id, current_price)
+
+        if not force:
+            if last_price is None or last_price == 0:
+                return
+
+            pct_change = abs((current_price - last_price) / last_price) * 100
+            if pct_change < SWAP_TRIGGER_THRESHOLD_PCT:
+                return
         else:
+            last_price = last_price if last_price is not None else current_price
             pct_change = (
                 abs((current_price - last_price) / last_price) * 100
                 if last_price
@@ -201,7 +206,7 @@ async def _decide_for_candidate(
     )
 
     try:
-        await executor.execute_agent_action(decision)
+        exec_result = await executor.execute_agent_action(decision)
     except Exception:
         logger.exception(
             "swap_trigger: executor submission failed for cap %s, logging as failed act attempt",
@@ -219,6 +224,8 @@ async def _decide_for_candidate(
         agent_index.mark_decision(candidate.cap_id)
         return
 
+    tx_digest = exec_result.get("txDigest") if isinstance(exec_result, dict) else None
+
     activity_log.log_decision(
         cap_id=candidate.cap_id,
         action_type=ActionType.MOCK_SWAP,
@@ -227,5 +234,6 @@ async def _decide_for_candidate(
         target=target,
         amount_mist=decision.amount_mist,
         risk_score=decision.risk_score,
+        tx_digest=tx_digest,
     )
     agent_index.mark_decision(candidate.cap_id)

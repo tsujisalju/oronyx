@@ -205,6 +205,7 @@ async def get_activity(
             target=row["target"],
             amount_mist=row["amount_mist"],
             risk_score=row["risk_score"],
+            tx_digest=row["tx_digest"],
             created_at=row["created_at"],
         )
         for row in rows

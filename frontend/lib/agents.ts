@@ -49,8 +49,8 @@ export function agentFromSummary(summary: AgentSummary): Agent {
     vaultId: summary.vault_id,
     owner: summary.owner,
     name:
-  summary.name ??
-  `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
+      summary.name ??
+      `Agent ${summary.cap_id.slice(0, 6)}…${summary.cap_id.slice(-4)}`,
     hasName: summary.name != null,
     status: summary.active ? "ACTIVE" : "INACTIVE",
     vaultBalance: "—",
@@ -63,6 +63,12 @@ export const MIST_PER_SUI = 1_000_000_000;
 
 export function formatMist(mist: number): string {
   return `${(mist / MIST_PER_SUI).toFixed(2)} SUI`;
+}
+
+// The executor is hardcoded to testnet (see executor/src/executeAgentAction.ts),
+// so the explorer link is too — no need to thread network config through the stack.
+export function suiExplorerTxUrl(digest: string): string {
+  return `https://testnet.suivision.xyz/txblock/${digest}`;
 }
 
 // e.g. "2 minutes ago" — for the audit-trail activity feed, where
